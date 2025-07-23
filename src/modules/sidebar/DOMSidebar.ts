@@ -1,21 +1,24 @@
 /**
  * DOMSidebar.ts
  * Pure DOM-based sidebar implementation for Chrome extension content script
- * Works with vanilla TypeScript (no React dependencies)
+ * Works with vanilla TypeScript and integrates with notepad storage system
  */
 
-import { NoteService, Note } from '../../services/noteService';
+import { StorageService } from '../storage/StorageService';
+import { NotepadData } from '../state/StateManager';
 
 export class DOMSidebar {
   private sidebarContainer: HTMLElement | null = null;
   private sidebarTab: HTMLElement | null = null;
   private isOpen: boolean = false;
-  private notes: Note[] = [];
+  private notepads: NotepadData[] = [];
+  private storageService: StorageService;
 
   private static readonly SIDEBAR_CONTAINER_ID = 'mindweaver-sidebar-container';
   private static readonly SIDEBAR_TAB_ID = 'mindweaver-sidebar-tab';
 
   constructor() {
+    this.storageService = new StorageService();
     this.init();
   }
 
@@ -24,7 +27,7 @@ export class DOMSidebar {
    */
   private async init(): Promise<void> {
     await this.createSidebarElements();
-    await this.loadNotes();
+    await this.loadNotepads();
     this.attachEventListeners();
   }
 
@@ -38,24 +41,22 @@ export class DOMSidebar {
     // Create sidebar container
     this.sidebarContainer = document.createElement('div');
     this.sidebarContainer.id = DOMSidebar.SIDEBAR_CONTAINER_ID;
-    this.sidebarContainer.className = 'mindweaver-sidebar-container';
     this.sidebarContainer.style.cssText = `
       position: fixed;
       top: 0;
       right: -300px;
       width: 300px;
       height: 100%;
-      background-color: var(--sidebar-bg, #ffffff);
-      border-left: 1px solid var(--sidebar-border, #e5e7eb);
+      background-color: #ffffff;
+      border-left: 1px solid #e5e7eb;
       z-index: 9998;
       transition: right 0.3s ease-in-out;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       box-shadow: -2px 0 8px rgba(0, 0, 0, 0.1);
     `;
 
     // Create sidebar content
     const sidebarContent = document.createElement('div');
-    sidebarContent.className = 'mindweaver-sidebar-content';
     sidebarContent.style.cssText = `
       padding: 1rem;
       height: 100%;
@@ -66,13 +67,12 @@ export class DOMSidebar {
 
     // Create header
     const header = document.createElement('h2');
-    header.textContent = 'My Notes';
+    header.textContent = 'My Notepads';
     header.style.cssText = `
       font-size: 1.25rem;
       font-weight: bold;
-      margin-bottom: 1rem;
-      color: var(--sidebar-header-color, #111827);
-      margin-top: 0;
+      margin: 0 0 1rem 0;
+      color: #111827;
     `;
 
     // Create notes container
@@ -92,7 +92,6 @@ export class DOMSidebar {
     // Create sidebar tab
     this.sidebarTab = document.createElement('div');
     this.sidebarTab.id = DOMSidebar.SIDEBAR_TAB_ID;
-    this.sidebarTab.className = 'mindweaver-sidebar-tab';
     this.sidebarTab.style.cssText = `
       position: fixed;
       top: 50%;
@@ -100,8 +99,8 @@ export class DOMSidebar {
       width: 36px;
       height: 36px;
       border-radius: 6px 0 0 6px;
-      background-color: var(--tab-bg, #3b82f6);
-      color: var(--tab-color, #ffffff);
+      background-color: #3b82f6;
+      color: #ffffff;
       display: flex;
       justify-content: center;
       align-items: center;
@@ -110,144 +109,128 @@ export class DOMSidebar {
       box-shadow: -2px 0 8px rgba(0, 0, 0, 0.1);
       transition: all 0.3s ease-in-out;
       transform: translateY(-50%);
-      border-right: none;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     `;
     this.sidebarTab.innerHTML = `
-      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <path d="M9 18l6-6-6-6"></path>
       </svg>
     `;
     this.sidebarTab.title = 'Toggle notes sidebar';
 
-    // Add hover effects
-    this.sidebarTab.addEventListener('mouseenter', () => {
-      this.sidebarTab!.style.backgroundColor = 'var(--tab-hover-bg, #2563eb)';
-      this.sidebarTab!.style.transform = 'translateY(-50%) scale(1.05)';
-    });
-
-    this.sidebarTab.addEventListener('mouseleave', () => {
-      this.sidebarTab!.style.backgroundColor = 'var(--tab-bg, #3b82f6)';
-      this.sidebarTab!.style.transform = 'translateY(-50%) scale(1)';
-    });
-
-    // Add elements to document
+    // Add elements to DOM
     document.body.appendChild(this.sidebarContainer);
     document.body.appendChild(this.sidebarTab);
   }
 
   /**
-   * Load notes from storage and render them
+   * Load notepads from storage and render them
    */
-  private async loadNotes(): Promise<void> {
+  private async loadNotepads(): Promise<void> {
     try {
-      this.notes = await NoteService.getNotes(false);
-      this.renderNotes();
+      const notepadMap = await this.storageService.loadAllNotepads();
+      this.notepads = Object.values(notepadMap).filter(notepad => notepad.content.trim() !== '');
+      this.renderNotepads();
     } catch (error) {
-      console.error('Error loading notes:', error);
+      console.error('Error loading notepads:', error);
       this.renderError('Failed to load notes');
     }
   }
 
   /**
-   * Render notes in the sidebar
+   * Render notepads in the sidebar
    */
-  private renderNotes(): void {
+  private renderNotepads(): void {
     const notesContainer = document.getElementById('sidebar-notes-container');
     if (!notesContainer) return;
 
-    // Clear existing content
     notesContainer.innerHTML = '';
-
-    if (this.notes.length === 0) {
-      // Show empty state
+    
+    if (this.notepads.length === 0) {
       const emptyState = document.createElement('div');
-      emptyState.className = 'empty-state';
       emptyState.style.cssText = `
-        background-color: #f3f4f6;
-        padding: 1rem;
-        border-radius: 0.375rem;
-        color: #6b7280;
         text-align: center;
-        border: 1px dashed #d1d5db;
+        color: #6b7280;
+        font-size: 0.875rem;
+        padding: 2rem 1rem;
       `;
       emptyState.innerHTML = `
-        <p style="margin: 0; font-size: 0.875rem;">No notes found.</p>
-        <p style="margin: 0.5rem 0 0 0; font-size: 0.75rem;">Create floating notepads to save your thoughts!</p>
+        <p style="margin: 0;">No notes yet</p>
+        <p style="margin: 0.5rem 0 0 0; font-size: 0.75rem;">Create a notepad and write something!</p>
       `;
       notesContainer.appendChild(emptyState);
-    } else {
-      // Render notes
-      this.notes.forEach(note => {
-        const noteElement = this.createNoteElement(note);
-        notesContainer.appendChild(noteElement);
-      });
+      return;
     }
+
+    // Sort notepads by last modified (newest first)
+    this.notepads.sort((a, b) => b.lastModified - a.lastModified);
+
+    this.notepads.forEach(notepad => {
+      const noteElement = this.createNotepadElement(notepad);
+      notesContainer.appendChild(noteElement);
+    });
   }
 
   /**
-   * Create a note element
+   * Create a notepad element
    */
-  private createNoteElement(note: Note): HTMLElement {
+  private createNotepadElement(notepad: NotepadData): HTMLElement {
     const noteItem = document.createElement('div');
-    noteItem.className = 'note-item';
     noteItem.style.cssText = `
       background-color: #ffffff;
+      border: 1px solid #e5e7eb;
       border-radius: 0.375rem;
-      padding: 1rem;
-      border: 1px solid var(--sidebar-border, #e5e7eb);
+      padding: 0.75rem;
+      cursor: pointer;
+      transition: all 0.2s ease-in-out;
       box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
-      transition: all 0.2s ease;
     `;
 
-    // Note content
-    const noteContent = document.createElement('div');
-    noteContent.className = 'note-content';
+    const noteContent = document.createElement('p');
     noteContent.style.cssText = `
-      margin-bottom: 0.5rem;
-      line-height: 1.5;
-      color: var(--sidebar-text, #1f2937);
+      margin: 0 0 0.5rem 0;
+      color: #374151;
       font-size: 0.875rem;
+      line-height: 1.4;
       word-wrap: break-word;
     `;
-    noteContent.textContent = note.content;
+    noteContent.textContent = notepad.content.length > 100 
+      ? notepad.content.substring(0, 100) + '...' 
+      : notepad.content;
 
-    // Note footer
     const noteFooter = document.createElement('div');
-    noteFooter.className = 'note-footer';
     noteFooter.style.cssText = `
       display: flex;
       justify-content: space-between;
       align-items: center;
-      font-size: 0.75rem;
-      color: var(--sidebar-text-secondary, #6b7280);
       margin-top: 0.5rem;
-      padding-top: 0.5rem;
-      border-top: 1px solid var(--sidebar-border, #e5e7eb);
     `;
 
-    // Timestamp
     const timestamp = document.createElement('span');
-    timestamp.textContent = new Date(note.timestamp).toLocaleString();
+    timestamp.style.cssText = `
+      font-size: 0.75rem;
+      color: #6b7280;
+    `;
+    timestamp.textContent = new Date(notepad.lastModified).toLocaleString();
 
-    // Delete button
     const deleteBtn = document.createElement('button');
-    deleteBtn.className = 'delete-note-btn';
-    deleteBtn.textContent = 'Delete';
     deleteBtn.style.cssText = `
-      background: none;
+      background: transparent;
       border: none;
       color: #ef4444;
       cursor: pointer;
+      font-size: 0.75rem;
       padding: 0.25rem 0.5rem;
       border-radius: 0.25rem;
-      transition: background-color 0.2s ease;
-      font-size: 0.75rem;
-      font-weight: 500;
+      transition: all 0.2s ease-in-out;
     `;
-    deleteBtn.onclick = () => this.deleteNote(note.id);
+    deleteBtn.textContent = 'Delete';
+    deleteBtn.onclick = async (e) => {
+      e.stopPropagation();
+      await this.deleteNotepad(notepad.id);
+    };
 
-    // Add hover effect to delete button
+    // Add hover effects
     deleteBtn.addEventListener('mouseenter', () => {
       deleteBtn.style.backgroundColor = '#fee2e2';
       deleteBtn.style.color = '#b91c1c';
@@ -299,14 +282,14 @@ export class DOMSidebar {
   }
 
   /**
-   * Delete a note
+   * Delete a notepad
    */
-  private async deleteNote(noteId: string): Promise<void> {
+  private async deleteNotepad(notepadId: string): Promise<void> {
     try {
-      await NoteService.deleteNote(noteId, false);
-      await this.loadNotes(); // Reload notes after deletion
+      await this.storageService.deleteNotepad(notepadId);
+      await this.loadNotepads(); // Reload notepads after deletion
     } catch (error) {
-      console.error('Error deleting note:', error);
+      console.error('Error deleting notepad:', error);
     }
   }
 
@@ -319,7 +302,6 @@ export class DOMSidebar {
     if (this.sidebarContainer && this.sidebarTab) {
       if (this.isOpen) {
         this.sidebarContainer.style.right = '0px';
-        this.sidebarContainer.classList.add('open');
         this.sidebarTab.style.right = '300px';
         // Rotate arrow to point left when open
         const svg = this.sidebarTab.querySelector('svg');
@@ -328,7 +310,6 @@ export class DOMSidebar {
         }
       } else {
         this.sidebarContainer.style.right = '-300px';
-        this.sidebarContainer.classList.remove('open');
         this.sidebarTab.style.right = '0px';
         // Reset arrow rotation when closed
         const svg = this.sidebarTab.querySelector('svg');
@@ -369,7 +350,7 @@ export class DOMSidebar {
    * Refresh notes (useful when new notes are added from notepads)
    */
   public async refresh(): Promise<void> {
-    await this.loadNotes();
+    await this.loadNotepads();
   }
 
   /**

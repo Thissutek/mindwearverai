@@ -77,27 +77,7 @@ function createNewNotepad(): void {
   }
 }
 
-/**
- * Load saved notepads from storage
- */
-async function loadSavedNotepads(): Promise<void> {
-  try {
-    // Get saved notepads from storage
-    const savedNotepads = await storageService.loadAllNotepads();
-    
-    // Create notepad instances for each saved notepad
-    Object.values(savedNotepads).forEach(notepadData => {
-      if (!activeNotepads.has(notepadData.id)) {
-        const notepad = new Notepad({
-          id: notepadData.id
-        });
-        activeNotepads.set(notepadData.id, notepad);
-      }
-    });
-  } catch (error) {
-    console.error('Failed to load saved notepads:', error);
-  }
-}
+
 
 /**
  * Initialize the extension
@@ -109,8 +89,7 @@ function initializeExtension(): void {
   // Initialize sidebar
   sidebar = new DOMSidebar();
   
-  // Load saved notepads
-  loadSavedNotepads();
+  // Don't load saved notepads automatically - they should only appear when + button is clicked
   
   // Clean up when extension is unloaded
   const cleanupHandler = () => {
