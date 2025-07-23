@@ -1,0 +1,212 @@
+/* Base styles with Tailwind-inspired variables */
+:root {
+  --sidebar-width: 300px;
+  --sidebar-bg: #ffffff;
+  --sidebar-border: #e5e7eb;
+  --sidebar-text: #1f2937;
+  --sidebar-text-secondary: #6b7280;
+  --sidebar-header-color: #111827;
+  
+  /* Tab styles */
+  --tab-bg: #3b82f6;
+  --tab-hover-bg: #2563eb;
+  --tab-color: #ffffff;
+  --tab-size: 2.25rem;
+  --tab-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  
+  /* Animation */
+  --transition-speed: 0.3s;
+  
+  /* Rounded corners */
+  --border-radius-sm: 0.25rem;
+  --border-radius-md: 0.375rem;
+  --border-radius-lg: 0.5rem;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --sidebar-bg: #111827;
+    --sidebar-border: #1f2937;
+    --sidebar-text: #f3f4f6;
+    --sidebar-text-secondary: #d1d5db;
+    --sidebar-header-color: #f9fafb;
+    
+    /* Tab styles for dark mode */
+    --tab-bg: #3b82f6;
+    --tab-hover-bg: #2563eb;
+    --tab-color: #ffffff;
+  }
+}
+
+/* Animation keyframes */
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Sidebar tab styles */
+.mindweaver-sidebar-tab {
+  position: fixed;
+  top: 50%;
+  right: 0;
+  width: var(--tab-size);
+  height: var(--tab-size);
+  border-radius: var(--border-radius-md) 0 0 var(--border-radius-md);
+  background-color: var(--tab-bg);
+  color: var(--tab-color);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  cursor: pointer;
+  z-index: 9999; /* Ensure it's above most page elements */
+  box-shadow: var(--tab-shadow);
+  transition: all var(--transition-speed) ease-in-out;
+  transform: translateY(-50%);
+  border-right: none;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+}
+
+.mindweaver-sidebar-tab:hover {
+  background-color: var(--tab-hover-bg);
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+}
+
+/* Add visual feedback when dragging */
+.mindweaver-sidebar-tab.dragging {
+  cursor: grabbing;
+  background-color: var(--tab-hover-bg);
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  transform: translateY(-50%) scale(1.05);
+}
+
+/* Rotate the arrow based on sidebar state */
+.mindweaver-sidebar-container.open + .mindweaver-sidebar-tab svg {
+  transform: rotate(180deg);
+}
+
+.mindweaver-sidebar-tab svg {
+  transition: transform var(--transition-speed) ease-in-out;
+}
+
+/* Sidebar container styles */
+.mindweaver-sidebar-container {
+  position: fixed;
+  top: 0;
+  right: 0;
+  height: 100%;
+}
+
+@media (prefers-color-scheme: dark) {
+  .mindweaver-sidebar-content .empty-state {
+    background-color: #1f2937;
+    border: 1px dashed #374151;
+  }
+}
+
+/* Note item styles */
+.note-item {
+  background-color: #ffffff;
+  border-radius: var(--border-radius-md);
+  padding: 1rem;
+  margin-bottom: 0.75rem;
+  border: 1px solid var(--sidebar-border);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  transition: all 0.2s ease;
+}
+
+.note-item:hover {
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+@media (prefers-color-scheme: dark) {
+  .note-item {
+    background-color: #1f2937;
+    border-color: #374151;
+  }
+}
+
+/* Note content */
+.note-content {
+  margin-bottom: 0.5rem;
+  line-height: 1.5;
+}
+
+/* Note footer */
+.note-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.875rem;
+  color: var(--sidebar-text-secondary);
+  margin-top: 0.5rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--sidebar-border);
+}
+
+/* Delete button */
+.delete-note-btn {
+  background: none;
+  border: none;
+  color: #ef4444;
+  cursor: pointer;
+  padding: 0.25rem 0.5rem;
+  border-radius: var(--border-radius-sm);
+  transition: background-color 0.2s ease;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.delete-note-btn:hover {
+  background-color: #fee2e2;
+  color: #b91c1c;
+}
+
+@media (prefers-color-scheme: dark) {
+  .delete-note-btn:hover {
+    background-color: #7f1d1d;
+    color: #fca5a5;
+  }
+}
+
+/* Floating control button styles */
+.mw-control-button {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  background-color: #3b82f6;
+  color: white;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  cursor: pointer;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  z-index: 9999;
+  transition: all 0.2s ease;
+}
+
+.mw-control-button:hover {
+  background-color: #2563eb;
+  transform: scale(1.05);
+  box-shadow: 0 6px 10px rgba(0, 0, 0, 0.15);
+}
+
+.mw-control-button:active {
+  transform: scale(0.95);
+}
+
+@media (prefers-color-scheme: dark) {
+  .mw-control-button {
+    background-color: #4f46e5;
+  }
+  
+  .mw-control-button:hover {
+    background-color: #4338ca;
+  }
+}
