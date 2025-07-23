@@ -12,7 +12,14 @@
     }
   },
   "permissions": [
-    "storage"
+    "storage",
+    "identity"
+  ],
+  "host_permissions": [
+    "https://*.firebaseapp.com/*",
+    "https://*.googleapis.com/*",
+    "https://identitytoolkit.googleapis.com/*",
+    "https://securetoken.googleapis.com/*"
   ],
   "content_scripts": [
     {

@@ -8,6 +8,7 @@ import { Notepad, NotepadOptions } from '../modules/notepad/Notepad';
 import { NotepadState, stateManager } from '../modules/state/StateManager';
 import { storageService } from '../modules/storage/StorageService';
 import { DOMSidebar } from '../modules/sidebar/DOMSidebar';
+import { authBridge } from '../services/authBridge';
 
 // Constants
 const CONTROL_BUTTON_ID = 'mindweaver-control-button';
@@ -77,12 +78,57 @@ function createNewNotepad(): void {
   }
 }
 
+/**
+ * Reopen a notepad from existing data (called when clicking sidebar notes)
+ */
+function reopenNotepad(notepadId: string): void {
+  console.log('🔄 Attempting to reopen notepad:', notepadId);
+  
+  // Check if notepad is already open
+  if (activeNotepads.has(notepadId)) {
+    console.log('⚠️ Notepad already open:', notepadId);
+    return;
+  }
+  
+  // Calculate position for reopened notepad
+  const offset = activeNotepads.size * 20;
+  
+  const notepadOptions: NotepadOptions = {
+    id: notepadId, // Use existing ID to load saved data
+    initialPosition: {
+      x: 100 + offset,
+      y: 100 + offset
+    },
+    initialState: NotepadState.NORMAL
+  };
+  
+  console.log('🔧 Creating notepad with options:', notepadOptions);
+  
+  // Create notepad with existing ID (will load saved content)
+  const notepad = new Notepad(notepadOptions);
+  
+  // Add to active notepads
+  activeNotepads.set(notepad.getId(), notepad);
+  
+  console.log('✅ Reopened notepad:', notepadId, 'Total active:', activeNotepads.size);
+}
+
 
 
 /**
  * Initialize the extension
  */
 function initializeExtension(): void {
+  // Initialize authentication bridge
+  authBridge.onAuthStateChanged((user) => {
+    console.log('🔐 Auth state changed in content script:', user ? `User: ${user.email}` : 'No user');
+    
+    // Refresh sidebar when auth state changes to load user-specific notes
+    if (sidebar) {
+      sidebar.refresh();
+    }
+  });
+  
   // Create control button
   createControlButton();
   
@@ -132,6 +178,25 @@ function initializeExtension(): void {
       });
     }
   });
+  
+  // Listen for notepad save events to refresh sidebar
+  document.addEventListener('mindweaver-notepad-saved', () => {
+    if (sidebar) {
+      sidebar.refresh();
+    }
+  });
+  
+  // Listen for sidebar note click events to reopen notepads
+  document.addEventListener('mindweaver-sidebar-note-click', (event: Event) => {
+    const customEvent = event as CustomEvent;
+    const notepadId = customEvent.detail?.notepadId;
+    if (notepadId) {
+      reopenNotepad(notepadId);
+    }
+  });
+  
+  // Expose reopenNotepad function globally for sidebar access
+  (window as any).mindweaverReopenNotepad = reopenNotepad;
 }
 
 // Run when content script is loaded

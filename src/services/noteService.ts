@@ -1,21 +1,5 @@
-// Firebase imports will be used when Firebase integration is implemented
-// import { db } from './firebase';
-
-// Placeholder types for Firebase functionality - uncomment when implementing Firebase
-/*
-type FirestoreDoc = {
-  id: string;
-  data: () => any;
-};
-
-type FirestoreQuerySnapshot = {
-  docs: FirestoreDoc[];
-};
-
-type FirestoreDocRef = {
-  id: string;
-};
-*/
+import { FirestoreService, FirestoreNote } from './firestoreService';
+import { AuthService } from './authService';
 
 export interface Note {
   id: string;
@@ -23,8 +7,16 @@ export interface Note {
   timestamp: number;
 }
 
-// Collection name in Firestore - uncomment when implementing Firebase
-// const NOTES_COLLECTION = 'notes';
+// Convert FirestoreNote to Note interface
+function firestoreNoteToNote(firestoreNote: FirestoreNote): Note {
+  return {
+    id: firestoreNote.id,
+    content: firestoreNote.content,
+    timestamp: firestoreNote.timestamp
+  };
+}
+
+
 
 // Local storage key
 const LOCAL_STORAGE_KEY = 'notes';
@@ -35,17 +27,18 @@ const LOCAL_STORAGE_KEY = 'notes';
 export class NoteService {
   /**
    * Get all notes
-   * @param useFirebase Whether to use Firebase or local storage
+   * @param useFirebase Whether to use Firebase or local storage (defaults to Firebase if user is authenticated)
    */
-  static async getNotes(useFirebase: boolean = false): Promise<Note[]> {
-    if (useFirebase) {
+  static async getNotes(useFirebase: boolean = true): Promise<Note[]> {
+    // Use Firebase if user is authenticated and useFirebase is true
+    if (useFirebase && AuthService.getCurrentUser()) {
       try {
-        console.log('Firebase integration not yet available');
-        // Fallback to local storage when Firebase is not available
-        return this.getNotes(false);
+        const firestoreNotes = await FirestoreService.getNotes();
+        return firestoreNotes.map(firestoreNoteToNote);
       } catch (error) {
         console.error('Error getting notes from Firebase:', error);
-        return [];
+        // Fallback to local storage
+        return this.getNotes(false);
       }
     } else {
       // Use local storage or Chrome storage
@@ -65,17 +58,18 @@ export class NoteService {
   /**
    * Save a new note
    * @param note Note to save
-   * @param useFirebase Whether to use Firebase or local storage
+   * @param useFirebase Whether to use Firebase or local storage (defaults to Firebase if user is authenticated)
    */
-  static async saveNote(note: Omit<Note, 'id'>, useFirebase: boolean = false): Promise<Note> {
-    if (useFirebase) {
+  static async saveNote(note: Omit<Note, 'id'>, useFirebase: boolean = true): Promise<Note> {
+    // Use Firebase if user is authenticated and useFirebase is true
+    if (useFirebase && AuthService.getCurrentUser()) {
       try {
-        console.log('Firebase integration not yet available');
-        // Fallback to local storage when Firebase is not available
-        return this.saveNote(note, false);
+        const firestoreNote = await FirestoreService.saveNote(note);
+        return firestoreNoteToNote(firestoreNote);
       } catch (error) {
         console.error('Error saving note to Firebase:', error);
-        throw error;
+        // Fallback to local storage
+        return this.saveNote(note, false);
       }
     } else {
       // Use local storage or Chrome storage
@@ -100,17 +94,17 @@ export class NoteService {
   /**
    * Delete a note
    * @param noteId ID of the note to delete
-   * @param useFirebase Whether to use Firebase or local storage
+   * @param useFirebase Whether to use Firebase or local storage (defaults to Firebase if user is authenticated)
    */
-  static async deleteNote(noteId: string, useFirebase: boolean = false): Promise<void> {
-    if (useFirebase) {
+  static async deleteNote(noteId: string, useFirebase: boolean = true): Promise<void> {
+    // Use Firebase if user is authenticated and useFirebase is true
+    if (useFirebase && AuthService.getCurrentUser()) {
       try {
-        console.log('Firebase integration not yet available');
-        // Fallback to local storage when Firebase is not available
-        return this.deleteNote(noteId, false);
+        await FirestoreService.deleteNote(noteId);
       } catch (error) {
         console.error('Error deleting note from Firebase:', error);
-        throw error;
+        // Fallback to local storage
+        return this.deleteNote(noteId, false);
       }
     } else {
       // Use local storage or Chrome storage

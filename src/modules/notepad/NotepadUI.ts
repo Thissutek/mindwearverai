@@ -153,13 +153,24 @@ export class NotepadUI {
     
     // Add input event listener with debounce
     textarea.addEventListener('input', () => {
+      console.log('⌨️ UI input event detected:', {
+        value: textarea.value,
+        length: textarea.value.length,
+        hasCallback: !!this.callbacks.onContentChange,
+        debounceDelay: this.contentDebounceDelay
+      });
+      
       if (this.contentChangeDebounceTimer) {
+        console.log('⏰ Clearing existing debounce timer');
         window.clearTimeout(this.contentChangeDebounceTimer);
       }
       
       this.contentChangeDebounceTimer = window.setTimeout(() => {
+        console.log('⏰ Debounce timer fired, calling onContentChange with:', textarea.value);
         if (this.callbacks.onContentChange) {
           this.callbacks.onContentChange(textarea.value);
+        } else {
+          console.error('❌ No onContentChange callback available!');
         }
         this.contentChangeDebounceTimer = null;
       }, this.contentDebounceDelay);

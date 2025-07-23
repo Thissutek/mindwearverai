@@ -18,7 +18,7 @@ export interface NotepadOptions {
 
 export class Notepad {
   private id: string;
-  private data: NotepadData;
+  private data: NotepadData = {} as NotepadData; // Initialize to avoid TypeScript error
   private ui: NotepadUI;
   private dragHandler: DragHandler;
   private undoStack: string[] = [];
@@ -30,7 +30,7 @@ export class Notepad {
     // Generate a unique ID if not provided
     this.id = options.id || `notepad-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
     
-    // Create or retrieve notepad data
+    // Initialize with basic data first (will be updated if loading from storage)
     this.data = stateManager.getNotepad(this.id) || stateManager.createNotepad(this.id, {
       content: options.initialContent || '',
       position: options.initialPosition || { x: 100, y: 100 },
@@ -51,6 +51,11 @@ export class Notepad {
     if (this.data) {
       this.ui.setContent(this.data.content);
       this.ui.setState(this.data.state);
+    }
+    
+    // If we have an existing ID (reopening), try to load from storage
+    if (options.id) {
+      this.loadFromStorageIfExists(options);
     }
     
     // Initialize drag handler
@@ -93,13 +98,24 @@ export class Notepad {
    * Handle content changes from the UI
    */
   private handleContentChange(content: string): void {
+    console.log('✏️ Notepad content change:', {
+      notepadId: this.id,
+      oldContent: this.data?.content?.substring(0, 30) + '...',
+      newContent: content.substring(0, 30) + '...',
+      contentLength: content.length,
+      hasData: !!this.data
+    });
+    
     if (this.data && this.data.content !== content) {
+      console.log('🔄 Content changed, updating state and saving...');
+      
       // Update state
       const updatedData = stateManager.updateNotepad(this.id, { content });
       
       // Save to storage if update was successful
       if (updatedData) {
         this.data = updatedData;
+        console.log('💾 Calling storageService.saveNotepad for:', this.id);
         storageService.saveNotepad(this.data);
         
         // Add to undo stack if significantly different
@@ -114,7 +130,11 @@ export class Notepad {
             this.undoStack.shift();
           }
         }
+      } else {
+        console.error('❌ Failed to update notepad state for:', this.id);
       }
+    } else {
+      console.log('⏭️ Content unchanged, skipping save');
     }
   }
   
@@ -159,9 +179,81 @@ export class Notepad {
   }
   
   /**
+   * Load notepad data from storage if it exists (for reopening saved notepads)
+   */
+  private async loadFromStorageIfExists(options: NotepadOptions): Promise<void> {
+    console.log('📂 Loading from storage for notepad:', this.id);
+    
+    try {
+      const allNotepads = await storageService.loadAllNotepads();
+      console.log('📋 All notepads from storage:', Object.keys(allNotepads));
+      
+      const storedData = allNotepads[this.id];
+      console.log('💾 Stored data for', this.id, ':', storedData);
+      
+      if (storedData) {
+        console.log('✨ Found stored content:', storedData.content);
+        
+        // Update the existing data with stored content
+        const updatedData = stateManager.updateNotepad(this.id, {
+          content: storedData.content,
+          position: options.initialPosition || storedData.position,
+          state: options.initialState || storedData.state
+        });
+        
+        console.log('🔄 Updated data in StateManager:', updatedData);
+        
+        if (updatedData) {
+          this.data = updatedData;
+          
+          console.log('🎨 Updating UI with content:', this.data.content);
+          
+          // Update UI with loaded content
+          this.ui.setContent(this.data.content);
+          this.ui.setState(this.data.state);
+          
+          // Update position
+          this.dragHandler.setPosition(this.data.position.x, this.data.position.y);
+          
+          // Initialize undo stack with loaded content
+          this.pushToUndoStack(this.data.content);
+          
+          console.log('✅ Successfully loaded notepad from storage:', this.id, 'Content length:', this.data.content.length);
+        } else {
+          console.error('❌ Failed to update StateManager with stored data');
+        }
+      } else {
+        console.log('❓ No stored data found for notepad:', this.id);
+      }
+    } catch (error) {
+      console.error('💥 Failed to load notepad from storage:', error);
+    }
+  }
+
+  /**
    * Handle close button click
    */
-  private handleClose(): void {
+  private async handleClose(): Promise<void> {
+    // Check if notepad has content before closing
+    const content = this.ui.getContent().trim();
+    
+    if (content) {
+      // Save notepad to storage if it has content
+      try {
+        await storageService.saveNotepad(this.data);
+        console.log('Notepad saved to storage on close:', this.id);
+        
+        // Refresh sidebar to show the saved note
+        // We need to access the sidebar from the content script
+        const event = new CustomEvent('mindweaver-notepad-saved', {
+          detail: { notepadId: this.id }
+        });
+        document.dispatchEvent(event);
+      } catch (error) {
+        console.error('Failed to save notepad on close:', error);
+      }
+    }
+    
     this.destroy();
   }
   
@@ -297,16 +389,28 @@ export class Notepad {
     
     this.isDestroyed = true;
     
+    console.log('🗑️ Destroying notepad:', {
+      id: this.id,
+      hasContent: this.data?.content?.trim() !== '',
+      content: this.data?.content?.substring(0, 20) + '...'
+    });
+    
     // Clean up UI
     this.ui.destroy();
     
     // Clean up drag handler
     this.dragHandler.destroy();
     
-    // Delete from storage
-    storageService.deleteNotepad(this.id);
+    // Only delete from storage if notepad is empty
+    // Notepads with content should persist for later access
+    if (!this.data || this.data.content.trim() === '') {
+      console.log('🗑️ Deleting empty notepad from storage:', this.id);
+      storageService.deleteNotepad(this.id);
+    } else {
+      console.log('💾 Preserving notepad with content in storage:', this.id);
+    }
     
-    // Delete from state manager
+    // Always delete from state manager (in-memory cleanup)
     stateManager.deleteNotepad(this.id);
   }
 }

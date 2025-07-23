@@ -129,7 +129,23 @@ export class DOMSidebar {
   private async loadNotepads(): Promise<void> {
     try {
       const notepadMap = await this.storageService.loadAllNotepads();
-      this.notepads = Object.values(notepadMap).filter(notepad => notepad.content.trim() !== '');
+      const allNotepads = Object.values(notepadMap);
+      
+      console.log('📋 Sidebar loading notepads:', {
+        totalFound: allNotepads.length,
+        notepadIds: allNotepads.map(n => n.id),
+        withContent: allNotepads.filter(n => n.content.trim() !== '').length,
+        emptyContent: allNotepads.filter(n => n.content.trim() === '').length,
+        contentSamples: allNotepads.map(n => ({ id: n.id, content: n.content.substring(0, 20) + '...' }))
+      });
+      
+      // Show only notepads with content (users typically don't want to see empty ones)
+      this.notepads = allNotepads.filter(notepad => notepad.content.trim() !== '');
+      
+      console.log('📋 Sidebar filtered notepads:', {
+        displayCount: this.notepads.length,
+        displayedIds: this.notepads.map(n => n.id)
+      });
       this.renderNotepads();
     } catch (error) {
       console.error('Error loading notepads:', error);
@@ -246,6 +262,23 @@ export class DOMSidebar {
 
     noteItem.appendChild(noteContent);
     noteItem.appendChild(noteFooter);
+
+    // Add click handler to reopen notepad
+    noteItem.addEventListener('click', (e) => {
+      // Don't trigger if clicking the delete button
+      if ((e.target as HTMLElement).closest('button')) {
+        return;
+      }
+      
+      // Dispatch custom event to reopen notepad
+      const event = new CustomEvent('mindweaver-sidebar-note-click', {
+        detail: { notepadId: notepad.id }
+      });
+      document.dispatchEvent(event);
+      
+      // Close sidebar after clicking note
+      this.toggle();
+    });
 
     // Add hover effect to note item
     noteItem.addEventListener('mouseenter', () => {
