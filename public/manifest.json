@@ -13,13 +13,18 @@
   },
   "permissions": [
     "storage",
-    "identity"
+    "identity",
+    "activeTab"
   ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'; media-src 'self' blob: data:;"
+  },
   "host_permissions": [
     "https://*.firebaseapp.com/*",
     "https://*.googleapis.com/*",
     "https://identitytoolkit.googleapis.com/*",
-    "https://securetoken.googleapis.com/*"
+    "https://securetoken.googleapis.com/*",
+    "https://api.deepgram.com/*"
   ],
   "content_scripts": [
     {
