@@ -1,18 +1,20 @@
 /**
- * content.tsx
- * Entry point for the floating notepad extension
+ * content.ts
+ * Entry point for the floating notepad extension (Pure TypeScript - no React/JSX)
  */
 
 import './content.css';
 import { Notepad, NotepadOptions } from '../modules/notepad/Notepad';
 import { NotepadState, stateManager } from '../modules/state/StateManager';
 import { storageService } from '../modules/storage/StorageService';
+import { DOMSidebar } from '../modules/sidebar/DOMSidebar';
 
 // Constants
 const CONTROL_BUTTON_ID = 'mindweaver-control-button';
 
-// Track active notepads
+// Track active notepads and sidebar
 const activeNotepads: Map<string, Notepad> = new Map();
+let sidebar: DOMSidebar | null = null;
 
 /**
  * Create a floating control button for creating new notepads
@@ -68,9 +70,34 @@ function createNewNotepad(): void {
   
   // Add to active notepads
   activeNotepads.set(notepad.getId(), notepad);
+  
+  // Refresh sidebar to show updated notes
+  if (sidebar) {
+    sidebar.refresh();
+  }
 }
 
-
+/**
+ * Load saved notepads from storage
+ */
+async function loadSavedNotepads(): Promise<void> {
+  try {
+    // Get saved notepads from storage
+    const savedNotepads = await storageService.loadAllNotepads();
+    
+    // Create notepad instances for each saved notepad
+    Object.values(savedNotepads).forEach(notepadData => {
+      if (!activeNotepads.has(notepadData.id)) {
+        const notepad = new Notepad({
+          id: notepadData.id
+        });
+        activeNotepads.set(notepadData.id, notepad);
+      }
+    });
+  } catch (error) {
+    console.error('Failed to load saved notepads:', error);
+  }
+}
 
 /**
  * Initialize the extension
@@ -79,13 +106,23 @@ function initializeExtension(): void {
   // Create control button
   createControlButton();
   
-  // Don't load saved notepads automatically - they should only appear when + button is clicked
+  // Initialize sidebar
+  sidebar = new DOMSidebar();
+  
+  // Load saved notepads
+  loadSavedNotepads();
   
   // Clean up when extension is unloaded
   const cleanupHandler = () => {
     // Clean up notepads
     activeNotepads.forEach(notepad => notepad.destroy());
     activeNotepads.clear();
+    
+    // Clean up sidebar
+    if (sidebar) {
+      sidebar.cleanup();
+      sidebar = null;
+    }
     
     // Remove control button
     const controlButton = document.getElementById(CONTROL_BUTTON_ID);

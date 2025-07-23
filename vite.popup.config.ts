@@ -10,7 +10,6 @@ declare namespace NodeJS {
 }
 declare const process: { env: NodeJS.ProcessEnv };
 
-// Import Node.js modules with type assertions
 // @ts-ignore
 import { resolve } from 'path'
 // @ts-ignore
@@ -40,28 +39,16 @@ export default defineConfig({
   },
   build: {
     outDir: 'dist',
-    emptyOutDir: true,
+    emptyOutDir: true, // Empty dir on first build (popup)
     rollupOptions: {
-      input: {
-        popup: resolve(__dirname, 'index.html'),
-        content: resolve(__dirname, 'src/content/index.ts')
-      },
+      input: resolve(__dirname, 'index.html'),
       output: {
-        entryFileNames: (chunkInfo) => {
-          // Content script must be a single file for Chrome extension
-          if (chunkInfo.name === 'content') {
-            return 'assets/content.js';
-          }
-          // Popup can use normal naming
-          return 'assets/[name].js';
-        },
-        chunkFileNames: 'assets/[name]-[hash].js',
-        assetFileNames: 'assets/[name].[ext]',
-        format: 'iife', // Force IIFE format for Chrome extension compatibility
-        name: 'ChromeExtension'
+        entryFileNames: 'assets/popup.js',
+        chunkFileNames: 'assets/popup-[hash].js',
+        assetFileNames: 'assets/[name].[ext]'
       }
     },
-    target: 'es2020', // More compatible target for Chrome extensions
+    target: 'es2020',
     minify: process.env.NODE_ENV === 'production'
   },
   define: {
