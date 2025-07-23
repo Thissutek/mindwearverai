@@ -22,3 +22,16 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+*/.env
+
+# Build artifacts and cache
+*.tsbuildinfo
+
+# Debug and test files
+debug-*.js
+test-*.js
+
+# macOS system files
+.DS_Store
+*/.DS_Store

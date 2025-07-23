@@ -44,7 +44,8 @@ export class Notepad {
       onCollapse: this.handleCollapse.bind(this),
       onClose: this.handleClose.bind(this),
       onUndo: this.handleUndo.bind(this),
-      onRedo: this.handleRedo.bind(this)
+      onRedo: this.handleRedo.bind(this),
+      onSpeechTranscript: this.handleSpeechTranscript.bind(this)
     });
     
     // Initialize UI with current data
@@ -377,6 +378,43 @@ export class Notepad {
       this.data = updatedData;
       storageService.saveNotepad(this.data);
     }
+  }
+
+  /**
+   * Handle speech-to-text transcript
+   */
+  private handleSpeechTranscript(transcript: string): void {
+    if (!transcript.trim()) {
+      return; // Ignore empty transcripts
+    }
+
+    console.log('🎤 Speech transcript received:', {
+      notepadId: this.id,
+      transcript: transcript.substring(0, 50) + '...',
+      transcriptLength: transcript.length
+    });
+
+    // Get current content
+    const currentContent = this.ui.getContent();
+    
+    // Append transcript to current content
+    // Add a space if there's existing content and it doesn't end with whitespace
+    let newContent = currentContent;
+    if (currentContent && !currentContent.endsWith(' ') && !currentContent.endsWith('\n')) {
+      newContent += ' ';
+    }
+    newContent += transcript;
+    
+    // If transcript doesn't end with punctuation, add a period
+    if (!transcript.match(/[.!?]\s*$/)) {
+      newContent += '.';
+    }
+    
+    // Update the notepad content
+    this.ui.setContent(newContent);
+    
+    // Trigger content change handler to save the changes
+    this.handleContentChange(newContent);
   }
   
   /**

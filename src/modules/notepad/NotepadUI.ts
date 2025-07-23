@@ -4,6 +4,7 @@
  */
 
 import { NotepadState } from '../state/StateManager';
+import { SpeechIntegration } from './SpeechIntegration';
 import './notepad.css';
 
 export interface NotepadUICallbacks {
@@ -13,6 +14,7 @@ export interface NotepadUICallbacks {
   onClose?: () => void;
   onUndo?: () => void;
   onRedo?: () => void;
+  onSpeechTranscript?: (transcript: string) => void;
 }
 
 export class NotepadUI {
@@ -23,6 +25,7 @@ export class NotepadUI {
   private callbacks: NotepadUICallbacks;
   private contentChangeDebounceTimer: number | null = null;
   private contentDebounceDelay = 300; // 300ms debounce for content changes
+  private speechIntegration: SpeechIntegration | null = null;
   
   constructor(id: string, callbacks: NotepadUICallbacks = {}) {
     this.callbacks = callbacks;
@@ -35,6 +38,9 @@ export class NotepadUI {
     // Create shadow DOM
     const shadowRoot = this.element.attachShadow({ mode: 'open' });
     
+    // Initialize speech integration first (before creating header)
+    this.initializeSpeechIntegration();
+    
     // Add styles to shadow DOM
     const styleElement = document.createElement('style');
     styleElement.textContent = this.getStyles();
@@ -45,7 +51,7 @@ export class NotepadUI {
     container.className = 'mw-notepad-container';
     shadowRoot.appendChild(container);
     
-    // Create header
+    // Create header (speech integration is now available)
     this.headerElement = this.createHeader();
     container.appendChild(this.headerElement);
     
@@ -57,6 +63,24 @@ export class NotepadUI {
     document.body.appendChild(this.element);
   }
   
+  /**
+   * Initialize speech integration
+   */
+  private initializeSpeechIntegration(): void {
+    if (this.callbacks.onSpeechTranscript) {
+      this.speechIntegration = new SpeechIntegration({
+        onTranscript: (transcript: string) => {
+          if (this.callbacks.onSpeechTranscript) {
+            this.callbacks.onSpeechTranscript(transcript);
+          }
+        },
+        onError: (error: Error) => {
+          console.error('Speech integration error:', error);
+        }
+      });
+    }
+  }
+
   /**
    * Create the notepad header with controls
    */
@@ -99,6 +123,12 @@ export class NotepadUI {
       }
     });
     controls.appendChild(redoButton);
+    
+    // Add speech button if speech integration is available
+    if (this.speechIntegration) {
+      const speechButton = this.speechIntegration.createSpeechButton();
+      controls.appendChild(speechButton);
+    }
     
     // Add collapse button
     const collapseButton = document.createElement('button');
@@ -257,6 +287,12 @@ export class NotepadUI {
    * Clean up event listeners
    */
   public destroy(): void {
+    // Clean up speech integration
+    if (this.speechIntegration) {
+      this.speechIntegration.destroy();
+      this.speechIntegration = null;
+    }
+    
     // Remove from DOM
     if (this.element.parentNode) {
       this.element.parentNode.removeChild(this.element);
@@ -388,6 +424,8 @@ export class NotepadUI {
         opacity: 0.8;
         box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
       }
+      
+      ${this.speechIntegration ? this.speechIntegration.getAdditionalStyles() : ''}
     `;
   }
 }
