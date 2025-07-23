@@ -1,6 +1,7 @@
 /**
  * StorageService.ts
- * Handles saving and loading notepad data using Firebase (when authenticated) or Chrome storage API (fallback)
+ * Cloud-first storage service - requires authentication and saves directly to Firebase
+ * No localStorage fallback to ensure reliable cloud synchronization
  */
 
 import { NotepadData } from '../state/StateManager';
@@ -8,12 +9,12 @@ import { FirebaseNotepadService } from '../../services/firebaseNotepadService';
 import { authBridge } from '../../services/authBridge';
 
 export class StorageService {
-  private static STORAGE_KEY = 'mindweaver-notepads';
   private saveDebounceTimers: Map<string, number> = new Map();
   private debounceDelay = 300; // 300ms debounce for auto-save
   
   /**
-   * Save a single notepad to storage
+   * Save a single notepad to Firebase (cloud-first approach)
+   * Requires user authentication - throws error if not authenticated
    */
   async saveNotepad(notepad: NotepadData): Promise<void> {
     const user = authBridge.getCurrentUser();
@@ -24,69 +25,51 @@ export class StorageService {
       userEmail: user?.email
     });
     
-    // Use Firebase if user is authenticated
-    if (user) {
-      try {
-        console.log('☁️ Attempting Firebase save for notepad:', notepad.id);
-        await FirebaseNotepadService.saveNotepad(notepad);
-        console.log('✅ Firebase save successful for notepad:', notepad.id);
-        return;
-      } catch (error) {
-        console.error('❌ Error saving to Firebase, falling back to local storage:', error);
-        // Fall back to local storage
-      }
+    // Require authentication for cloud-first approach
+    if (!user) {
+      const error = new Error('Authentication required: Please sign in to save your notes to the cloud');
+      console.error('❌ Save failed - user not authenticated:', error.message);
+      throw error;
     }
     
-    // Use local Chrome storage as fallback
-    console.log('💾 Using Chrome storage fallback for notepad:', notepad.id);
-    return this.debouncedSave(notepad);
+    try {
+      console.log('☁️ Saving to Firebase for notepad:', notepad.id);
+      await FirebaseNotepadService.saveNotepad(notepad);
+      console.log('✅ Firebase save successful for notepad:', notepad.id);
+    } catch (error) {
+      console.error('❌ Error saving to Firebase:', error);
+      throw new Error('Failed to save note to cloud. Please check your connection and try again.');
+    }
   }
   
   /**
-   * Save multiple notepads to storage
+   * Save multiple notepads to Firebase (cloud-first approach)
+   * Requires user authentication - throws error if not authenticated
    */
   async saveAllNotepads(notepads: NotepadData[]): Promise<void> {
     console.log('🔄 StorageService.saveAllNotepads called with', notepads.length, 'notepads');
     
-    // Use Firebase if user is authenticated
-    if (authBridge.getCurrentUser()) {
-      try {
-        console.log('☁️ Attempting Firebase batch save for', notepads.length, 'notepads');
-        // Save each notepad individually to Firebase
-        await Promise.all(notepads.map(notepad => FirebaseNotepadService.saveNotepad(notepad)));
-        console.log('✅ Firebase batch save successful');
-        return;
-      } catch (error) {
-        console.error('❌ Error saving to Firebase, falling back to local storage:', error);
-        // Fall back to local storage
-      }
+    const user = authBridge.getCurrentUser();
+    if (!user) {
+      const error = new Error('Authentication required: Please sign in to save your notes to the cloud');
+      console.error('❌ Batch save failed - user not authenticated:', error.message);
+      throw error;
     }
     
-    // Use local Chrome storage as fallback
-    console.log('💾 Using Chrome storage for', notepads.length, 'notepads');
-    return new Promise((resolve, reject) => {
-      const notepadsMap: Record<string, NotepadData> = {};
-      
-      notepads.forEach(notepad => {
-        notepadsMap[notepad.id] = notepad;
-        console.log('📝 Adding to Chrome storage map:', notepad.id, notepad.content.substring(0, 30) + '...');
-      });
-      
-      console.log('🔧 Calling chrome.storage.local.set with key:', StorageService.STORAGE_KEY);
-      chrome.storage.local.set({ [StorageService.STORAGE_KEY]: notepadsMap }, () => {
-        if (chrome.runtime.lastError) {
-          console.error('❌ Chrome storage save failed:', chrome.runtime.lastError);
-          reject(chrome.runtime.lastError);
-        } else {
-          console.log('✅ Chrome storage save successful. Saved', Object.keys(notepadsMap).length, 'notepads');
-          resolve();
-        }
-      });
-    });
+    try {
+      console.log('☁️ Firebase batch save for', notepads.length, 'notepads');
+      // Save each notepad individually to Firebase
+      await Promise.all(notepads.map(notepad => FirebaseNotepadService.saveNotepad(notepad)));
+      console.log('✅ Firebase batch save successful');
+    } catch (error) {
+      console.error('❌ Error saving batch to Firebase:', error);
+      throw new Error('Failed to save notes to cloud. Please check your connection and try again.');
+    }
   }
   
   /**
-   * Load all notepads from storage
+   * Load all notepads from Firebase (cloud-first approach)
+   * Requires user authentication - returns empty object if not authenticated
    */
   async loadAllNotepads(): Promise<Record<string, NotepadData>> {
     const user = authBridge.getCurrentUser();
@@ -95,70 +78,50 @@ export class StorageService {
       userEmail: user?.email
     });
     
-    // Use Firebase if user is authenticated
-    if (user) {
-      try {
-        console.log('☁️ Attempting Firebase load');
-        const firebaseData = await FirebaseNotepadService.getAllNotepads();
-        console.log('✅ Firebase load successful. Found', Object.keys(firebaseData).length, 'notepads');
-        return firebaseData;
-      } catch (error) {
-        console.error('❌ Error loading from Firebase, falling back to local storage:', error);
-        // Fall back to local storage
-      }
+    // Require authentication for cloud-first approach
+    if (!user) {
+      console.log('⚠️ Load skipped - user not authenticated. Returning empty notes.');
+      return {};
     }
     
-    // Use local Chrome storage as fallback
-    console.log('💾 Using Chrome storage fallback');
-    return new Promise((resolve, reject) => {
-      console.log('🔧 Calling chrome.storage.local.get with key:', StorageService.STORAGE_KEY);
-      chrome.storage.local.get(StorageService.STORAGE_KEY, (result) => {
-        if (chrome.runtime.lastError) {
-          console.error('❌ Chrome storage load failed:', chrome.runtime.lastError);
-          reject(chrome.runtime.lastError);
-        } else {
-          const data = result[StorageService.STORAGE_KEY] || {};
-          console.log('✅ Chrome storage load successful. Found', Object.keys(data).length, 'notepads:', Object.keys(data));
-          resolve(data);
-        }
-      });
-    });
+    try {
+      console.log('☁️ Loading from Firebase');
+      const firebaseData = await FirebaseNotepadService.getAllNotepads();
+      console.log('✅ Firebase load successful. Found', Object.keys(firebaseData).length, 'notepads');
+      return firebaseData;
+    } catch (error) {
+      console.error('❌ Error loading from Firebase:', error);
+      throw new Error('Failed to load notes from cloud. Please check your connection and try again.');
+    }
   }
   
   /**
-   * Delete a notepad from storage
+   * Delete a notepad from Firebase (cloud-first approach)
+   * Requires user authentication - throws error if not authenticated
    */
   async deleteNotepad(notepadId: string): Promise<void> {
-    // Use Firebase if user is authenticated
-    if (authBridge.getCurrentUser()) {
-      try {
-        await FirebaseNotepadService.deleteNotepad(notepadId);
-        return;
-      } catch (error) {
-        console.error('Error deleting from Firebase, falling back to local storage:', error);
-        // Fall back to local storage
-      }
+    const user = authBridge.getCurrentUser();
+    if (!user) {
+      const error = new Error('Authentication required: Please sign in to delete notes');
+      console.error('❌ Delete failed - user not authenticated:', error.message);
+      throw error;
     }
     
-    // Use local Chrome storage as fallback
-    return new Promise((resolve, reject) => {
-      this.loadAllNotepads()
-        .then(notepads => {
-          if (notepads[notepadId]) {
-            delete notepads[notepadId];
-            return this.saveAllNotepads(Object.values(notepads));
-          }
-          return Promise.resolve();
-        })
-        .then(resolve)
-        .catch(reject);
-    });
+    try {
+      console.log('🗑️ Deleting notepad from Firebase:', notepadId);
+      await FirebaseNotepadService.deleteNotepad(notepadId);
+      console.log('✅ Firebase delete successful for notepad:', notepadId);
+    } catch (error) {
+      console.error('❌ Error deleting from Firebase:', error);
+      throw new Error('Failed to delete note from cloud. Please check your connection and try again.');
+    }
   }
   
   /**
-   * Debounced save to prevent excessive storage operations
+   * Debounced save to prevent excessive Firebase operations
+   * Used internally to batch rapid saves to the same notepad
    */
-  private debouncedSave(notepad: NotepadData): Promise<void> {
+  debouncedSave(notepad: NotepadData): Promise<void> {
     return new Promise((resolve, reject) => {
       // Clear existing timer for this notepad if it exists
       if (this.saveDebounceTimers.has(notepad.id)) {
@@ -167,11 +130,7 @@ export class StorageService {
       
       // Set new timer
       const timerId = window.setTimeout(() => {
-        this.loadAllNotepads()
-          .then(notepads => {
-            notepads[notepad.id] = notepad;
-            return this.saveAllNotepads(Object.values(notepads));
-          })
+        this.saveNotepad(notepad)
           .then(resolve)
           .catch(reject)
           .finally(() => {
@@ -181,6 +140,20 @@ export class StorageService {
       
       this.saveDebounceTimers.set(notepad.id, timerId);
     });
+  }
+  
+  /**
+   * Check if user is authenticated and can save/load notes
+   */
+  isAuthenticated(): boolean {
+    return authBridge.getCurrentUser() !== null;
+  }
+  
+  /**
+   * Get current authenticated user info
+   */
+  getCurrentUser() {
+    return authBridge.getCurrentUser();
   }
 }
 

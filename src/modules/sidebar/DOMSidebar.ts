@@ -4,7 +4,7 @@
  * Works with vanilla TypeScript and integrates with notepad storage system
  */
 
-import { StorageService } from '../storage/StorageService';
+import { storageService } from '../storage/StorageService';
 import { NotepadData } from '../state/StateManager';
 
 export class DOMSidebar {
@@ -12,13 +12,11 @@ export class DOMSidebar {
   private sidebarTab: HTMLElement | null = null;
   private isOpen: boolean = false;
   private notepads: NotepadData[] = [];
-  private storageService: StorageService;
 
   private static readonly SIDEBAR_CONTAINER_ID = 'mindweaver-sidebar-container';
   private static readonly SIDEBAR_TAB_ID = 'mindweaver-sidebar-tab';
 
   constructor() {
-    this.storageService = new StorageService();
     this.init();
   }
 
@@ -128,7 +126,7 @@ export class DOMSidebar {
    */
   private async loadNotepads(): Promise<void> {
     try {
-      const notepadMap = await this.storageService.loadAllNotepads();
+      const notepadMap = await storageService.loadAllNotepads();
       const allNotepads = Object.values(notepadMap);
       
       console.log('📋 Sidebar loading notepads:', {
@@ -319,7 +317,7 @@ export class DOMSidebar {
    */
   private async deleteNotepad(notepadId: string): Promise<void> {
     try {
-      await this.storageService.deleteNotepad(notepadId);
+      await storageService.deleteNotepad(notepadId);
       await this.loadNotepads(); // Reload notepads after deletion
     } catch (error) {
       console.error('Error deleting notepad:', error);

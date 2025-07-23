@@ -425,6 +425,87 @@ export class NotepadUI {
         box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
       }
       
+      /* Save status indicator */
+      .notepad-save-status {
+        position: absolute;
+        top: 8px;
+        right: 8px;
+        font-size: 12px;
+        padding: 4px 8px;
+        border-radius: 4px;
+        background-color: #f1f5f9;
+        color: #64748b;
+        border: 1px solid #e2e8f0;
+        z-index: 10;
+        transition: all 0.2s ease;
+      }
+      
+      .notepad-save-status.status-saving {
+        background-color: #fef3c7;
+        color: #92400e;
+        border-color: #fcd34d;
+      }
+      
+      .notepad-save-status.status-saved {
+        background-color: #dcfce7;
+        color: #166534;
+        border-color: #86efac;
+      }
+      
+      .notepad-save-status.status-error {
+        background-color: #fee2e2;
+        color: #dc2626;
+        border-color: #fca5a5;
+      }
+      
+      /* Authentication prompt */
+      .notepad-auth-prompt {
+        position: absolute;
+        bottom: 8px;
+        left: 8px;
+        right: 8px;
+        background-color: #fef3c7;
+        border: 1px solid #fcd34d;
+        border-radius: 6px;
+        padding: 8px;
+        z-index: 20;
+        animation: slideUp 0.3s ease;
+      }
+      
+      .auth-prompt-content {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        font-size: 12px;
+        color: #92400e;
+      }
+      
+      .auth-prompt-button {
+        background-color: #f59e0b;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        padding: 4px 8px;
+        font-size: 11px;
+        cursor: pointer;
+        transition: background-color 0.2s ease;
+      }
+      
+      .auth-prompt-button:hover {
+        background-color: #d97706;
+      }
+      
+      @keyframes slideUp {
+        from {
+          transform: translateY(100%);
+          opacity: 0;
+        }
+        to {
+          transform: translateY(0);
+          opacity: 1;
+        }
+      }
+      
       ${this.speechIntegration ? this.speechIntegration.getAdditionalStyles() : ''}
     `;
   }
