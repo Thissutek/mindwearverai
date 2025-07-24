@@ -48,6 +48,7 @@ export class FirebaseNotepadService {
         content: notepadData.content,
         position: notepadData.position,
         state: notepadData.state,
+        tags: notepadData.tags || [],
         lastModified: notepadData.lastModified,
         userId: currentUser.uid,
         createdAt: notepadData.lastModified ? Timestamp.fromMillis(notepadData.lastModified) : serverTimestamp(),
@@ -89,6 +90,7 @@ export class FirebaseNotepadService {
           content: data.content,
           position: data.position,
           state: data.state,
+          tags: data.tags || [],
           lastModified: data.lastModified
         };
       });

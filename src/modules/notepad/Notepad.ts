@@ -48,13 +48,15 @@ export class Notepad {
       onClose: this.handleClose.bind(this),
       onUndo: this.handleUndo.bind(this),
       onRedo: this.handleRedo.bind(this),
-      onSpeechTranscript: this.handleSpeechTranscript.bind(this)
+      onSpeechTranscript: this.handleSpeechTranscript.bind(this),
+      onTagsChange: this.handleTagsChange.bind(this)
     });
     
     // Initialize UI with current data
     if (this.data) {
       this.ui.setContent(this.data.content);
       this.ui.setState(this.data.state);
+      this.ui.setTags(this.data.tags || []);
     }
     
     // If we have an existing ID (reopening), try to load from storage
@@ -241,11 +243,18 @@ export class Notepad {
         if (updatedData) {
           this.data = updatedData;
           
-          console.log('🎨 Updating UI with content:', this.data.content);
+          console.log('🎨 Updating UI with loaded data:', {
+            content: this.data.content.substring(0, 50) + '...',
+            contentLength: this.data.content.length,
+            tags: this.data.tags || [],
+            state: this.data.state,
+            position: this.data.position
+          });
           
           // Update UI with loaded content
           this.ui.setContent(this.data.content);
           this.ui.setState(this.data.state);
+          this.ui.setTags(this.data.tags || []);
           
           // Update position
           this.dragHandler.setPosition(this.data.position.x, this.data.position.y);
@@ -253,7 +262,11 @@ export class Notepad {
           // Initialize undo stack with loaded content
           this.pushToUndoStack(this.data.content);
           
-          console.log('✅ Successfully loaded notepad from storage:', this.id, 'Content length:', this.data.content.length);
+          console.log('✅ Successfully loaded notepad from storage:', this.id, {
+            contentLength: this.data.content.length,
+            tagCount: (this.data.tags || []).length,
+            state: this.data.state
+          });
         } else {
           console.error('❌ Failed to update StateManager with stored data');
         }
@@ -359,6 +372,13 @@ export class Notepad {
     
     if (data.content !== this.ui.getContent()) {
       this.ui.setContent(data.content);
+    }
+    
+    // Update tags if needed
+    const currentTags = this.ui.getTags();
+    const newTags = data.tags || [];
+    if (JSON.stringify(currentTags) !== JSON.stringify(newTags)) {
+      this.ui.setTags(newTags);
     }
     
     // Update position if needed
@@ -644,5 +664,41 @@ export class Notepad {
     
     // Always delete from state manager (in-memory cleanup)
     stateManager.deleteNotepad(this.id);
+  }
+
+  /**
+   * Handle tag changes from the UI
+   */
+  private async handleTagsChange(tags: string[]): Promise<void> {
+    console.log('🏷️ Notepad tags change:', {
+      notepadId: this.id,
+      oldTags: this.data?.tags || [],
+      newTags: tags
+    });
+    
+    if (this.data && JSON.stringify(this.data.tags || []) !== JSON.stringify(tags)) {
+      console.log('🔄 Tags changed, updating state and saving...');
+      
+      // Update state
+      const updatedData = stateManager.updateNotepad(this.id, { tags });
+      
+      // Save to storage if update was successful
+      if (updatedData) {
+        this.data = updatedData;
+        console.log('💾 Calling storageService.saveNotepad for tags:', this.id);
+        
+        try {
+          await storageService.saveNotepad(this.data);
+          console.log('✅ Successfully saved notepad tags to cloud:', this.id);
+        } catch (error) {
+          console.error('❌ Failed to save notepad tags to cloud:', error);
+          this.handleSaveError(error as Error);
+        }
+      } else {
+        console.error('❌ Failed to update notepad state for tags:', this.id);
+      }
+    } else {
+      console.log('⏭️ Tags unchanged, skipping save');
+    }
   }
 }

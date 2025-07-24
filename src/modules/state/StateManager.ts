@@ -17,6 +17,7 @@ export interface NotepadData {
     y: number;
   };
   state: NotepadState;
+  tags: string[];
   lastModified: number;
 }
 
@@ -51,6 +52,7 @@ export class StateManager {
       content: '',
       position: { x: 100, y: 100 },
       state: NotepadState.NORMAL,
+      tags: [],
       lastModified: Date.now(),
       ...initialData
     };

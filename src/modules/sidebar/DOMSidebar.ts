@@ -212,6 +212,33 @@ export class DOMSidebar {
       ? notepad.content.substring(0, 100) + '...' 
       : notepad.content;
 
+    // Add tags display if notepad has tags
+    let tagsElement: HTMLElement | null = null;
+    if (notepad.tags && notepad.tags.length > 0) {
+      tagsElement = document.createElement('div');
+      tagsElement.style.cssText = `
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px;
+        margin-bottom: 0.5rem;
+      `;
+      
+      notepad.tags.forEach(tag => {
+        const tagSpan = document.createElement('span');
+        tagSpan.style.cssText = `
+          background-color: #e0f2fe;
+          color: #0369a1;
+          border: 1px solid #bae6fd;
+          border-radius: 10px;
+          padding: 2px 6px;
+          font-size: 0.7rem;
+          font-weight: 500;
+        `;
+        tagSpan.textContent = `#${tag}`;
+        tagsElement!.appendChild(tagSpan);
+      });
+    }
+
     const noteFooter = document.createElement('div');
     noteFooter.style.cssText = `
       display: flex;
@@ -258,6 +285,10 @@ export class DOMSidebar {
     noteFooter.appendChild(timestamp);
     noteFooter.appendChild(deleteBtn);
 
+    // Add elements to note item in order
+    if (tagsElement) {
+      noteItem.appendChild(tagsElement);
+    }
     noteItem.appendChild(noteContent);
     noteItem.appendChild(noteFooter);
 
@@ -268,11 +299,24 @@ export class DOMSidebar {
         return;
       }
       
+      // Add loading state
+      const originalText = noteContent.textContent;
+      noteContent.textContent = 'Opening note...';
+      noteItem.style.pointerEvents = 'none';
+      noteItem.style.opacity = '0.7';
+      
       // Dispatch custom event to reopen notepad
       const event = new CustomEvent('mindweaver-sidebar-note-click', {
         detail: { notepadId: notepad.id }
       });
       document.dispatchEvent(event);
+      
+      // Reset state after a delay
+      setTimeout(() => {
+        noteContent.textContent = originalText;
+        noteItem.style.pointerEvents = '';
+        noteItem.style.opacity = '';
+      }, 500);
       
       // Close sidebar after clicking note
       this.toggle();

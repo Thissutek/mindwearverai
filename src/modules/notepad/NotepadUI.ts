@@ -5,6 +5,7 @@
 
 import { NotepadState } from '../state/StateManager';
 import { SpeechIntegration } from './SpeechIntegration';
+import { TagManager } from '../tags/TagManager';
 import './notepad.css';
 
 export interface NotepadUICallbacks {
@@ -15,17 +16,20 @@ export interface NotepadUICallbacks {
   onUndo?: () => void;
   onRedo?: () => void;
   onSpeechTranscript?: (transcript: string) => void;
+  onTagsChange?: (tags: string[]) => void;
 }
 
 export class NotepadUI {
   private element: HTMLElement;
   private headerElement: HTMLElement;
+  private tagSection: HTMLElement;
   private contentElement: HTMLTextAreaElement;
   private currentState: NotepadState = NotepadState.NORMAL;
   private callbacks: NotepadUICallbacks;
   private contentChangeDebounceTimer: number | null = null;
   private contentDebounceDelay = 300; // 300ms debounce for content changes
   private speechIntegration: SpeechIntegration | null = null;
+  private tagManager: TagManager | null = null;
   
   constructor(id: string, callbacks: NotepadUICallbacks = {}) {
     this.callbacks = callbacks;
@@ -54,6 +58,10 @@ export class NotepadUI {
     // Create header (speech integration is now available)
     this.headerElement = this.createHeader();
     container.appendChild(this.headerElement);
+    
+    // Create tag section
+    this.tagSection = this.createTagSection();
+    container.appendChild(this.tagSection);
     
     // Create content area
     this.contentElement = this.createContentArea();
@@ -172,6 +180,28 @@ export class NotepadUI {
     header.appendChild(controls);
     return header;
   }
+
+  /**
+   * Create the tag section between header and content
+   */
+  private createTagSection(): HTMLElement {
+    const tagSection = document.createElement('div');
+    tagSection.className = 'mw-notepad-tag-section';
+    
+    // Initialize tag manager
+    this.tagManager = new TagManager({
+      container: tagSection,
+      initialTags: [],
+      placeholder: 'Add tags (e.g. #work, #personal)...',
+      onTagsChange: (tags: string[]) => {
+        if (this.callbacks.onTagsChange) {
+          this.callbacks.onTagsChange(tags);
+        }
+      }
+    });
+    
+    return tagSection;
+  }
   
   /**
    * Create the notepad content area
@@ -240,6 +270,22 @@ export class NotepadUI {
   public getContent(): string {
     return this.contentElement.value;
   }
+
+  /**
+   * Get current tags
+   */
+  public getTags(): string[] {
+    return this.tagManager ? this.tagManager.getTags() : [];
+  }
+
+  /**
+   * Set tags
+   */
+  public setTags(tags: string[]): void {
+    if (this.tagManager) {
+      this.tagManager.setTags(tags);
+    }
+  }
   
   /**
    * Set the notepad content
@@ -302,6 +348,12 @@ export class NotepadUI {
     if (this.speechIntegration) {
       this.speechIntegration.destroy();
       this.speechIntegration = null;
+    }
+    
+    // Clean up tag manager
+    if (this.tagManager) {
+      this.tagManager.destroy();
+      this.tagManager = null;
     }
     
     // Remove from DOM
@@ -376,6 +428,73 @@ export class NotepadUI {
       .mw-notepad-close:hover {
         background-color: #ef4444;
         color: white;
+      }
+      
+      .mw-notepad-tag-section {
+        padding: 8px 12px;
+        border-bottom: 1px solid #f1f5f9;
+        background-color: #fafbfc;
+      }
+      
+      .mw-tag-container {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        align-items: center;
+        min-height: 24px;
+      }
+      
+      .mw-tag {
+        display: inline-flex;
+        align-items: center;
+        background-color: #e0f2fe;
+        color: #0369a1;
+        border: 1px solid #bae6fd;
+        border-radius: 12px;
+        padding: 2px 8px;
+        font-size: 12px;
+        font-weight: 500;
+        gap: 4px;
+      }
+      
+      .mw-tag-text {
+        line-height: 1;
+      }
+      
+      .mw-tag-remove {
+        background: none;
+        border: none;
+        color: #0369a1;
+        cursor: pointer;
+        padding: 0;
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 14px;
+        font-weight: bold;
+        line-height: 1;
+      }
+      
+      .mw-tag-remove:hover {
+        background-color: #0369a1;
+        color: white;
+      }
+      
+      .mw-tag-input {
+        border: none;
+        outline: none;
+        background: transparent;
+        font-size: 12px;
+        color: #374151;
+        min-width: 120px;
+        flex: 1;
+      }
+      
+      .mw-tag-input::placeholder {
+        color: #9ca3af;
       }
       
       .mw-notepad-content {

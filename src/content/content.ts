@@ -72,6 +72,15 @@ function createNewNotepad(): void {
   // Add to active notepads
   activeNotepads.set(notepad.getId(), notepad);
   
+  // Set up cleanup handler for when notepad is destroyed
+  const cleanup = () => {
+    activeNotepads.delete(notepad.getId());
+    console.log('🗑️ Removed notepad from active list:', notepad.getId(), 'Remaining:', activeNotepads.size);
+  };
+  
+  // Store cleanup function for potential use
+  (notepad as any).__cleanup = cleanup;
+  
   // Refresh sidebar to show updated notes
   if (sidebar) {
     sidebar.refresh();
@@ -81,36 +90,103 @@ function createNewNotepad(): void {
 /**
  * Reopen a notepad from existing data (called when clicking sidebar notes)
  */
-function reopenNotepad(notepadId: string): void {
+async function reopenNotepad(notepadId: string): Promise<void> {
   console.log('🔄 Attempting to reopen notepad:', notepadId);
   
   // Check if notepad is already open
   if (activeNotepads.has(notepadId)) {
     console.log('⚠️ Notepad already open:', notepadId);
+    // Focus the existing notepad by bringing it to front
+    const existingNotepad = activeNotepads.get(notepadId);
+    if (existingNotepad) {
+      const element = existingNotepad.getElement();
+      element.style.zIndex = (9999 + activeNotepads.size).toString();
+    }
     return;
   }
   
-  // Calculate position for reopened notepad
-  const offset = activeNotepads.size * 20;
-  
-  const notepadOptions: NotepadOptions = {
-    id: notepadId, // Use existing ID to load saved data
-    initialPosition: {
-      x: 100 + offset,
-      y: 100 + offset
-    },
-    initialState: NotepadState.NORMAL
-  };
-  
-  console.log('🔧 Creating notepad with options:', notepadOptions);
-  
-  // Create notepad with existing ID (will load saved content)
-  const notepad = new Notepad(notepadOptions);
-  
-  // Add to active notepads
-  activeNotepads.set(notepad.getId(), notepad);
-  
-  console.log('✅ Reopened notepad:', notepadId, 'Total active:', activeNotepads.size);
+  try {
+    // First verify the notepad exists in storage
+    console.log('📦 Verifying notepad exists in storage:', notepadId);
+    const allNotepads = await storageService.loadAllNotepads();
+    const notepadData = allNotepads[notepadId];
+    
+    if (!notepadData) {
+      console.error('❌ Notepad not found in storage:', notepadId);
+      // Refresh sidebar to remove stale entries
+      if (sidebar) {
+        sidebar.refresh();
+      }
+      return;
+    }
+    
+    console.log('✅ Found notepad data:', {
+      id: notepadData.id,
+      contentLength: notepadData.content.length,
+      tags: notepadData.tags || [],
+      lastModified: notepadData.lastModified
+    });
+    
+    // Calculate position for reopened notepad
+    const offset = activeNotepads.size * 20;
+    
+    const notepadOptions: NotepadOptions = {
+      id: notepadId, // Use existing ID to load saved data
+      initialPosition: {
+        x: 100 + offset,
+        y: 100 + offset
+      },
+      initialState: NotepadState.NORMAL
+    };
+    
+    console.log('🔧 Creating notepad with options:', notepadOptions);
+    
+    // Create notepad with existing ID (will load saved content)
+    const notepad = new Notepad(notepadOptions);
+    
+    // Add to active notepads
+    activeNotepads.set(notepad.getId(), notepad);
+    
+    // Set up cleanup handler for when notepad is destroyed
+    const cleanup = () => {
+      activeNotepads.delete(notepadId);
+      console.log('🗑️ Removed notepad from active list:', notepadId, 'Remaining:', activeNotepads.size);
+    };
+    
+    // Store cleanup function for potential use
+    (notepad as any).__cleanup = cleanup;
+    
+    console.log('✅ Successfully reopened notepad:', notepadId, 'Total active:', activeNotepads.size);
+    
+  } catch (error) {
+    console.error('❌ Failed to reopen notepad:', notepadId, error);
+    
+    // Show user-friendly error
+    const errorMessage = document.createElement('div');
+    errorMessage.style.cssText = `
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      background-color: #fee2e2;
+      border: 1px solid #fca5a5;
+      color: #b91c1c;
+      padding: 12px 16px;
+      border-radius: 6px;
+      z-index: 10000;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      font-size: 14px;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    `;
+    errorMessage.textContent = 'Failed to open note. Please try again.';
+    document.body.appendChild(errorMessage);
+    
+    // Auto-remove error message after 3 seconds
+    setTimeout(() => {
+      if (errorMessage.parentNode) {
+        errorMessage.parentNode.removeChild(errorMessage);
+      }
+    }, 3000);
+  }
 }
 
 /**
@@ -180,11 +256,11 @@ function initializeExtension(): void {
   });
   
   // Listen for sidebar note click events to reopen notepads
-  document.addEventListener('mindweaver-sidebar-note-click', (event: Event) => {
+  document.addEventListener('mindweaver-sidebar-note-click', async (event: Event) => {
     const customEvent = event as CustomEvent;
     const notepadId = customEvent.detail?.notepadId;
     if (notepadId) {
-      reopenNotepad(notepadId);
+      await reopenNotepad(notepadId);
     }
   });
   
