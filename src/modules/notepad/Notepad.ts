@@ -4,6 +4,7 @@
  */
 
 import { DragHandler } from '../drag/DragHandler';
+import { ResizeHandler } from '../resize/ResizeHandler';
 import { NotepadData, NotepadState, stateManager } from '../state/StateManager';
 import { storageService } from '../storage/StorageService';
 // Import NotepadUI from barrel file
@@ -14,6 +15,7 @@ export interface NotepadOptions {
   initialContent?: string;
   initialPosition?: { x: number; y: number };
   initialState?: NotepadState;
+  initialSize?: { width: number; height: number };
 }
 
 export class Notepad {
@@ -21,6 +23,7 @@ export class Notepad {
   private data: NotepadData = {} as NotepadData; // Initialize to avoid TypeScript error
   private ui: NotepadUI;
   private dragHandler: DragHandler;
+  private resizeHandler?: ResizeHandler;
   private undoStack: string[] = [];
   private redoStack: string[] = [];
   private maxUndoStackSize = 50;
@@ -67,9 +70,32 @@ export class Notepad {
       onDragEnd: this.handleDragEnd.bind(this)
     });
     
-    // Set initial position
+    // Initialize resize handler
+    const shadowContainer = this.ui.getShadowContainer();
+    if (shadowContainer) {
+      this.resizeHandler = new ResizeHandler({
+        element: this.ui.getElement(),
+        container: shadowContainer,
+        minWidth: 250,
+        minHeight: 200,
+        maxWidth: window.innerWidth * 0.9,
+        maxHeight: window.innerHeight * 0.9,
+        onResizeStart: this.handleResizeStart.bind(this),
+        onResize: this.handleResize.bind(this),
+        onResizeEnd: this.handleResizeEnd.bind(this)
+      });
+    } else {
+      console.error('Failed to get shadow container for resize handler');
+    }
+    
+    // Set initial position and size
     if (this.data) {
       this.dragHandler.setPosition(this.data.position.x, this.data.position.y);
+    }
+    
+    // Set initial size if provided
+    if (options.initialSize && this.resizeHandler) {
+      this.resizeHandler.setDimensions(options.initialSize.width, options.initialSize.height);
     }
     
     // Initialize undo/redo stack with current content
@@ -287,6 +313,33 @@ export class Notepad {
       this.data = updatedData;
       storageService.saveNotepad(this.data);
     }
+  }
+
+  /**
+   * Handle resize start
+   */
+  private handleResizeStart(): void {
+    // Add visual feedback during resize
+    this.ui.addResizeFeedback();
+  }
+
+  /**
+   * Handle resize in progress
+   */
+  private handleResize(width: number, height: number): void {
+    // Optional: Add real-time feedback during resize
+    console.log(`Resizing notepad ${this.id} to ${width}x${height}`);
+  }
+
+  /**
+   * Handle resize end
+   */
+  private handleResizeEnd(width: number, height: number): void {
+    // Remove visual feedback
+    this.ui.removeResizeFeedback();
+    
+    // For now, we don't persist size to storage, but this could be added later
+    console.log(`Notepad ${this.id} resized to ${width}x${height}`);
   }
   
   /**
@@ -574,6 +627,11 @@ export class Notepad {
     
     // Clean up drag handler
     this.dragHandler.destroy();
+    
+    // Clean up resize handler
+    if (this.resizeHandler) {
+      this.resizeHandler.destroy();
+    }
     
     // Only delete from storage if notepad is empty
     // Notepads with content should persist for later access

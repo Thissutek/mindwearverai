@@ -1,69 +1,109 @@
-# React + TypeScript + Vite
+# MindweaveAI
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A browser-based note-taking application with cloud synchronization, speech-to-text capabilities, and a draggable UI.
 
-Currently, two official plugins are available:
+## Features
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- **Draggable Notepad Interface**: Create and position multiple notepads anywhere on your screen
+- **Cloud Synchronization**: All notes are saved to Firebase in real-time
+- **Speech-to-Text**: Dictate your notes using built-in speech recognition
+- **User Authentication**: Secure access to your notes with Firebase authentication
+- **Rich UI Experience**:
+  - Minimize, collapse, or close notepads
+  - Undo/redo functionality
+  - Drag-and-drop positioning
+  - Visual feedback for saving status
+  - Responsive design
 
-## Expanding the ESLint configuration
+## Tech Stack
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+- **Frontend**: React 19 with TypeScript
+- **Build Tool**: Vite 7
+- **Styling**: Tailwind CSS
+- **Backend/Storage**: Firebase (Firestore)
+- **Authentication**: Firebase Auth
+- **Speech Recognition**: Deepgram SDK
 
-```js
-export default tseslint.config([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+## Project Structure
 
-      // Remove tseslint.configs.recommended and replace with this
-      ...tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      ...tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      ...tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```
+src/
+├── assets/         # Static assets
+├── components/     # Reusable UI components
+├── config/         # Configuration files
+├── content/        # Browser extension content scripts
+├── modules/
+│   ├── drag/       # Drag functionality
+│   ├── notepad/    # Core notepad functionality
+│   ├── sidebar/    # Sidebar UI components
+│   ├── state/      # State management
+│   └── storage/    # Storage services
+├── popup/          # Browser extension popup
+├── services/       # Firebase and other services
+└── utils/          # Utility functions
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## Getting Started
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+### Prerequisites
 
-export default tseslint.config([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+- Node.js (latest LTS version)
+- npm or yarn
+- Firebase account
+
+### Installation
+
+1. Clone the repository:
+   ```
+   git clone https://github.com/yourusername/mindweaveai.git
+   cd mindweaveai
+   ```
+
+2. Install dependencies:
+   ```
+   npm install
+   ```
+
+3. Set up environment variables:
+   Create a `.env` file in the root directory with your Firebase configuration:
+   ```
+   VITE_FIREBASE_API_KEY=your_api_key
+   VITE_FIREBASE_AUTH_DOMAIN=your_auth_domain
+   VITE_FIREBASE_PROJECT_ID=your_project_id
+   VITE_FIREBASE_STORAGE_BUCKET=your_storage_bucket
+   VITE_FIREBASE_MESSAGING_SENDER_ID=your_messaging_sender_id
+   VITE_FIREBASE_APP_ID=your_app_id
+   VITE_DEEPGRAM_API_KEY=your_deepgram_api_key
+   ```
+
+### Development
+
+Run the development server:
 ```
+npm run dev
+```
+
+For browser extension development:
+```
+npm run dev:popup
+```
+
+### Building
+
+Build the application:
+```
+npm run build
+```
+
+This will create:
+- Browser extension popup: `npm run build:popup`
+- Content scripts: `npm run build:content`
+
+## Usage
+
+1. **Creating a Note**: Click the MindweaveAI icon to create a new notepad
+2. **Editing**: Click on the notepad and start typing
+3. **Dictating**: Click the microphone icon to start speech-to-text
+4. **Moving**: Drag the notepad header to reposition
+5. **Minimizing/Collapsing**: Use the respective buttons in the notepad header
+6. **Authentication**: Sign in to save your notes to the cloud
