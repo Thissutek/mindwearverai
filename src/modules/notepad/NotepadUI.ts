@@ -222,6 +222,17 @@ export class NotepadUI {
   public getHeaderElement(): HTMLElement {
     return this.headerElement;
   }
+
+  /**
+   * Get the shadow DOM container (for resize handles)
+   */
+  public getShadowContainer(): HTMLElement | null {
+    const shadowRoot = this.element.shadowRoot;
+    if (shadowRoot) {
+      return shadowRoot.querySelector('.mw-notepad-container') as HTMLElement;
+    }
+    return null;
+  }
   
   /**
    * Get the current content
@@ -307,14 +318,15 @@ export class NotepadUI {
     return `
       /* These styles are isolated within the shadow DOM */
       .mw-notepad-container {
+        position: relative;
         font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
         background-color: #ffffff;
         border-radius: 8px;
         box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
         display: flex;
         flex-direction: column;
-        width: 300px;
-        height: 250px;
+        min-width: 250px;
+        min-height: 200px;
         overflow: hidden;
         transition: all 0.2s ease;
         border: 1px solid #e2e8f0;
@@ -425,7 +437,192 @@ export class NotepadUI {
         box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
       }
       
+      /* Save status indicator */
+      .notepad-save-status {
+        position: absolute;
+        top: 8px;
+        right: 8px;
+        font-size: 12px;
+        padding: 4px 8px;
+        border-radius: 4px;
+        background-color: #f1f5f9;
+        color: #64748b;
+        border: 1px solid #e2e8f0;
+        z-index: 10;
+        transition: all 0.2s ease;
+      }
+      
+      .notepad-save-status.status-saving {
+        background-color: #fef3c7;
+        color: #92400e;
+        border-color: #fcd34d;
+      }
+      
+      .notepad-save-status.status-saved {
+        background-color: #dcfce7;
+        color: #166534;
+        border-color: #86efac;
+      }
+      
+      .notepad-save-status.status-error {
+        background-color: #fee2e2;
+        color: #dc2626;
+        border-color: #fca5a5;
+      }
+      
+      /* Authentication prompt */
+      .notepad-auth-prompt {
+        position: absolute;
+        bottom: 8px;
+        left: 8px;
+        right: 8px;
+        background-color: #fef3c7;
+        border: 1px solid #fcd34d;
+        border-radius: 6px;
+        padding: 8px;
+        z-index: 20;
+        animation: slideUp 0.3s ease;
+      }
+      
+      .auth-prompt-content {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        font-size: 12px;
+        color: #92400e;
+      }
+      
+      .auth-prompt-button {
+        background-color: #f59e0b;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        padding: 4px 8px;
+        font-size: 11px;
+        cursor: pointer;
+        transition: background-color 0.2s ease;
+      }
+      
+      .auth-prompt-button:hover {
+        background-color: #d97706;
+      }
+      
+      @keyframes slideUp {
+        from {
+          transform: translateY(100%);
+          opacity: 0;
+        }
+        to {
+          transform: translateY(0);
+          opacity: 1;
+        }
+      }
+
+      /* Resize handle styles */
+      .mw-resize-handle {
+        position: absolute;
+        background: transparent;
+        z-index: 1000;
+        transition: background-color 0.2s ease;
+      }
+
+      .mw-resize-handle:hover {
+        background: rgba(59, 130, 246, 0.1);
+      }
+
+      .mw-resize-n {
+        top: -5px;
+        left: 10px;
+        right: 10px;
+        height: 10px;
+        cursor: n-resize;
+      }
+
+      .mw-resize-s {
+        bottom: -5px;
+        left: 10px;
+        right: 10px;
+        height: 10px;
+        cursor: s-resize;
+      }
+
+      .mw-resize-e {
+        top: 10px;
+        bottom: 10px;
+        right: -5px;
+        width: 10px;
+        cursor: e-resize;
+      }
+
+      .mw-resize-w {
+        top: 10px;
+        bottom: 10px;
+        left: -5px;
+        width: 10px;
+        cursor: w-resize;
+      }
+
+      .mw-resize-ne {
+        top: -5px;
+        right: -5px;
+        width: 15px;
+        height: 15px;
+        cursor: ne-resize;
+      }
+
+      .mw-resize-nw {
+        top: -5px;
+        left: -5px;
+        width: 15px;
+        height: 15px;
+        cursor: nw-resize;
+      }
+
+      .mw-resize-se {
+        bottom: -5px;
+        right: -5px;
+        width: 15px;
+        height: 15px;
+        cursor: se-resize;
+      }
+
+      .mw-resize-sw {
+        bottom: -5px;
+        left: -5px;
+        width: 15px;
+        height: 15px;
+        cursor: sw-resize;
+      }
+      
       ${this.speechIntegration ? this.speechIntegration.getAdditionalStyles() : ''}
     `;
+  }
+
+  /**
+   * Add visual feedback during resize
+   */
+  public addResizeFeedback(): void {
+    const shadowRoot = this.element.shadowRoot;
+    if (shadowRoot) {
+      const container = shadowRoot.querySelector('.mw-notepad-container') as HTMLElement;
+      if (container) {
+        container.style.border = '2px solid #3b82f6';
+        container.style.boxShadow = '0 0 0 1px rgba(59, 130, 246, 0.2)';
+      }
+    }
+  }
+
+  /**
+   * Remove resize feedback
+   */
+  public removeResizeFeedback(): void {
+    const shadowRoot = this.element.shadowRoot;
+    if (shadowRoot) {
+      const container = shadowRoot.querySelector('.mw-notepad-container') as HTMLElement;
+      if (container) {
+        container.style.border = '';
+        container.style.boxShadow = '';
+      }
+    }
   }
 }

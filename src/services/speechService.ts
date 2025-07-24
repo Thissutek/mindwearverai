@@ -41,9 +41,12 @@ export class SpeechService {
   }
 
   private initializeDeepgram() {
+    console.log('🔧 Initializing Deepgram client...');
     const apiKey = import.meta.env.VITE_DEEPGRAM_API_KEY;
+    console.log('🔧 API key available:', !!apiKey, 'Length:', apiKey?.length || 0);
+    
     if (!apiKey) {
-      console.error('Deepgram API key not found in environment variables');
+      console.error('🔧 Deepgram API key not found in environment variables');
       this.setStatus('error');
       this.events.onError(new Error('Deepgram API key not configured'));
       return;
@@ -51,8 +54,9 @@ export class SpeechService {
 
     try {
       this.deepgram = createClient(apiKey);
+      console.log('🔧 Deepgram client created successfully');
     } catch (error) {
-      console.error('Failed to initialize Deepgram client:', error);
+      console.error('🔧 Failed to initialize Deepgram client:', error);
       this.setStatus('error');
       this.events.onError(error as Error);
     }
@@ -64,18 +68,22 @@ export class SpeechService {
   }
 
   async startRecording(options: SpeechToTextOptions = {}): Promise<void> {
+    console.log('🎙️ Starting recording with options:', options);
+    
     if (this.isRecording) {
-      console.warn('Already recording');
+      console.warn('🎙️ Already recording');
       return;
     }
 
     if (!this.deepgram) {
+      console.error('🎙️ Deepgram client not initialized');
       this.events.onError(new Error('Deepgram client not initialized'));
       return;
     }
 
     try {
       // Request microphone access
+      console.log('🎙️ Requesting microphone access...');
       this.audioStream = await navigator.mediaDevices.getUserMedia({
         audio: {
           echoCancellation: true,
@@ -83,11 +91,12 @@ export class SpeechService {
           autoGainControl: true,
         }
       });
+      console.log('🎙️ Microphone access granted');
 
       this.setStatus('listening');
 
       // Create live transcription connection
-      this.connection = this.deepgram.listen.live({
+      const connectionOptions = {
         model: options.model || 'nova-2',
         language: options.language || 'en-US',
         smart_format: true,
@@ -95,14 +104,22 @@ export class SpeechService {
         diarize: options.diarize || false,
         interim_results: options.interim_results !== false,
         endpointing: 300, // End utterance after 300ms of silence
-      });
+      };
+      console.log('🎙️ Creating Deepgram connection with options:', connectionOptions);
+      
+      this.connection = this.deepgram.listen.live(connectionOptions);
+      console.log('🎙️ Deepgram connection created');
+      
 
       // Set up event listeners
       this.connection.on(LiveTranscriptionEvents.Open, () => {
-        console.log('Deepgram connection opened');
+        console.log('🎙️ Deepgram connection opened - readyState:', this.connection?.getReadyState());
+        // Start MediaRecorder only after connection is open
+        this.startMediaRecorder();
       });
 
       this.connection.on(LiveTranscriptionEvents.Transcript, (data: any) => {
+        console.log('🎙️ Raw transcript data received:', data);
         const transcript = data.channel?.alternatives?.[0];
         if (transcript && transcript.transcript) {
           const result: TranscriptionResult = {
@@ -116,40 +133,69 @@ export class SpeechService {
               confidence: word.confidence || 0,
             })),
           };
+          console.log('🎙️ Processed transcript result:', result);
           this.events.onTranscript(result);
+        } else {
+          console.log('🎙️ No transcript found in data:', data);
         }
       });
 
       this.connection.on(LiveTranscriptionEvents.Error, (error: any) => {
-        console.error('Deepgram error:', error);
+        console.error('🎙️ Deepgram error:', error);
         this.setStatus('error');
         this.events.onError(new Error(error.message || 'Deepgram transcription error'));
       });
 
-      this.connection.on(LiveTranscriptionEvents.Close, () => {
-        console.log('Deepgram connection closed');
+      this.connection.on(LiveTranscriptionEvents.Close, (event: any) => {
+        console.log('🎙️ Deepgram connection closed:', event);
+        console.log('🎙️ Connection close reason:', event?.reason || 'Unknown');
+        console.log('🎙️ Connection close code:', event?.code || 'Unknown');
         this.setStatus('idle');
       });
 
-      // Create MediaRecorder to send audio data to Deepgram
-      this.mediaRecorder = new MediaRecorder(this.audioStream, {
-        mimeType: 'audio/webm;codecs=opus',
-      });
-
-      this.mediaRecorder.ondataavailable = (event) => {
-        if (event.data.size > 0 && this.connection?.getReadyState() === 1) {
-          this.connection.send(event.data);
-        }
-      };
-
-      this.mediaRecorder.start(100); // Send data every 100ms
-      this.isRecording = true;
+      // Don't start MediaRecorder here - wait for connection to open
+      console.log('🎙️ Waiting for Deepgram connection to open before starting MediaRecorder...');
 
     } catch (error) {
-      console.error('Failed to start recording:', error);
+      console.error('🎙️ Failed to start recording:', error);
       this.setStatus('error');
       this.events.onError(error as Error);
       this.cleanup();
+    }
+  }
+
+  private startMediaRecorder(): void {
+    if (!this.audioStream || !this.connection) {
+      console.error('🎙️ Cannot start MediaRecorder - missing audioStream or connection');
+      return;
+    }
+
+    try {
+      // Create MediaRecorder to send audio data to Deepgram
+      console.log('🎙️ Creating MediaRecorder...');
+      this.mediaRecorder = new MediaRecorder(this.audioStream, {
+        mimeType: 'audio/webm;codecs=opus',
+      });
+      console.log('🎙️ MediaRecorder created');
+
+      this.mediaRecorder.ondataavailable = (event) => {
+        console.log('🎙️ Audio data available:', event.data.size, 'bytes');
+        if (event.data.size > 0 && this.connection?.getReadyState() === 1) {
+          console.log('🎙️ Sending audio data to Deepgram');
+          this.connection.send(event.data);
+        } else {
+          console.log('🎙️ Not sending data - size:', event.data.size, 'readyState:', this.connection?.getReadyState());
+        }
+      };
+
+      console.log('🎙️ Starting MediaRecorder...');
+      this.mediaRecorder.start(100); // Send data every 100ms
+      this.isRecording = true;
+      console.log('🎙️ Recording started successfully');
+    } catch (error) {
+      console.error('🎙️ Failed to start MediaRecorder:', error);
+      this.setStatus('error');
+      this.events.onError(error as Error);
     }
   }
 

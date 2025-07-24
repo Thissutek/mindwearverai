@@ -113,31 +113,24 @@ function reopenNotepad(notepadId: string): void {
   console.log('✅ Reopened notepad:', notepadId, 'Total active:', activeNotepads.size);
 }
 
-
-
 /**
- * Initialize the extension
+ * Initialize the extension with authentication state monitoring
  */
 function initializeExtension(): void {
-  // Initialize authentication bridge
-  authBridge.onAuthStateChanged((user) => {
-    console.log('🔐 Auth state changed in content script:', user ? `User: ${user.email}` : 'No user');
-    
-    // Refresh sidebar when auth state changes to load user-specific notes
-    if (sidebar) {
-      sidebar.refresh();
-    }
-  });
+  console.log('🚀 MindWeaver extension initializing...');
+  
+  // Initialize authentication state monitoring
+  initializeAuthState();
   
   // Create control button
   createControlButton();
   
-  // Initialize sidebar
+  // Create sidebar
   sidebar = new DOMSidebar();
   
-  // Don't load saved notepads automatically - they should only appear when + button is clicked
+  console.log('✅ MindWeaver extension initialized successfully');
   
-  // Clean up when extension is unloaded
+  // Set up cleanup handler
   const cleanupHandler = () => {
     // Clean up notepads
     activeNotepads.forEach(notepad => notepad.destroy());
@@ -197,6 +190,73 @@ function initializeExtension(): void {
   
   // Expose reopenNotepad function globally for sidebar access
   (window as any).mindweaverReopenNotepad = reopenNotepad;
+}
+
+/**
+ * Initialize authentication state monitoring
+ */
+function initializeAuthState(): void {
+  console.log('🔐 Initializing authentication state monitoring...');
+  
+  // Listen for auth state changes
+  authBridge.onAuthStateChanged((user) => {
+    console.log('🔄 Content script received auth state change:', {
+      hasUser: !!user,
+      userEmail: user?.email || 'null',
+      timestamp: new Date().toISOString()
+    });
+    
+    // Update sidebar with new auth state
+    if (sidebar) {
+      console.log('🔄 Refreshing sidebar with new auth state');
+      sidebar.refresh();
+    }
+    
+    // Notify all active notepads of auth state change
+    activeNotepads.forEach((_, notepadId) => {
+      console.log(`🔄 Notifying notepad ${notepadId} of auth state change`);
+      // The notepad will handle auth state through StorageService when it tries to save
+    });
+    
+    // Log current storage service auth state for debugging
+    console.log('🔍 StorageService auth check:', {
+      isAuthenticated: storageService.isAuthenticated(),
+      currentUser: storageService.getCurrentUser()?.email || 'null'
+    });
+  });
+  
+  // Force initial auth state request with retry logic
+  let retryCount = 0;
+  const maxRetries = 5;
+  const retryDelay = 1000; // 1 second
+  
+  const requestAuthWithRetry = () => {
+    console.log(`📨 Requesting auth state (attempt ${retryCount + 1}/${maxRetries})...`);
+    
+    // Check if we already have auth state
+    const currentUser = authBridge.getCurrentUser();
+    if (currentUser) {
+      console.log('✅ Auth state already available:', currentUser.email);
+      return;
+    }
+    
+    // Force auth bridge to request state from popup
+    authBridge.requestAuthState();
+    
+    retryCount++;
+    if (retryCount < maxRetries) {
+      setTimeout(requestAuthWithRetry, retryDelay);
+    } else {
+      console.warn('⚠️ Failed to get auth state after', maxRetries, 'attempts');
+    }
+  };
+  
+  // Start auth state request after a short delay to ensure popup is ready
+  setTimeout(requestAuthWithRetry, 500);
+  
+  // Also try to get auth state immediately
+  console.log('📨 Immediate auth state request...');
+  authBridge.requestAuthState();
 }
 
 // Run when content script is loaded

@@ -3,6 +3,8 @@ import '../index.css';
 import { AuthService, AuthUser } from '../services/authService';
 import AuthForm from '../components/AuthForm';
 import Dashboard from '../components/Dashboard';
+// Initialize popup auth bridge for content script communication
+import '../services/popupAuthBridge';
 
 const Popup = () => {
   const [user, setUser] = useState<AuthUser | null>(null);

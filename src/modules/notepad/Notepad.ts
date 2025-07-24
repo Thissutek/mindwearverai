@@ -4,6 +4,7 @@
  */
 
 import { DragHandler } from '../drag/DragHandler';
+import { ResizeHandler } from '../resize/ResizeHandler';
 import { NotepadData, NotepadState, stateManager } from '../state/StateManager';
 import { storageService } from '../storage/StorageService';
 // Import NotepadUI from barrel file
@@ -14,6 +15,7 @@ export interface NotepadOptions {
   initialContent?: string;
   initialPosition?: { x: number; y: number };
   initialState?: NotepadState;
+  initialSize?: { width: number; height: number };
 }
 
 export class Notepad {
@@ -21,6 +23,7 @@ export class Notepad {
   private data: NotepadData = {} as NotepadData; // Initialize to avoid TypeScript error
   private ui: NotepadUI;
   private dragHandler: DragHandler;
+  private resizeHandler?: ResizeHandler;
   private undoStack: string[] = [];
   private redoStack: string[] = [];
   private maxUndoStackSize = 50;
@@ -67,9 +70,32 @@ export class Notepad {
       onDragEnd: this.handleDragEnd.bind(this)
     });
     
-    // Set initial position
+    // Initialize resize handler
+    const shadowContainer = this.ui.getShadowContainer();
+    if (shadowContainer) {
+      this.resizeHandler = new ResizeHandler({
+        element: this.ui.getElement(),
+        container: shadowContainer,
+        minWidth: 250,
+        minHeight: 200,
+        maxWidth: window.innerWidth * 0.9,
+        maxHeight: window.innerHeight * 0.9,
+        onResizeStart: this.handleResizeStart.bind(this),
+        onResize: this.handleResize.bind(this),
+        onResizeEnd: this.handleResizeEnd.bind(this)
+      });
+    } else {
+      console.error('Failed to get shadow container for resize handler');
+    }
+    
+    // Set initial position and size
     if (this.data) {
       this.dragHandler.setPosition(this.data.position.x, this.data.position.y);
+    }
+    
+    // Set initial size if provided
+    if (options.initialSize && this.resizeHandler) {
+      this.resizeHandler.setDimensions(options.initialSize.width, options.initialSize.height);
     }
     
     // Initialize undo/redo stack with current content
@@ -98,7 +124,7 @@ export class Notepad {
   /**
    * Handle content changes from the UI
    */
-  private handleContentChange(content: string): void {
+  private async handleContentChange(content: string): Promise<void> {
     console.log('✏️ Notepad content change:', {
       notepadId: this.id,
       oldContent: this.data?.content?.substring(0, 30) + '...',
@@ -117,19 +143,27 @@ export class Notepad {
       if (updatedData) {
         this.data = updatedData;
         console.log('💾 Calling storageService.saveNotepad for:', this.id);
-        storageService.saveNotepad(this.data);
         
-        // Add to undo stack if significantly different
-        const lastContent = this.undoStack[this.undoStack.length - 1];
-        if (content !== lastContent) {
-          this.undoStack.push(content);
-          // Clear redo stack since we have a new change
-          this.redoStack = [];
+        try {
+          await storageService.saveNotepad(this.data);
+          console.log('✅ Successfully saved notepad to cloud:', this.id);
+          this.showSaveStatus('saved');
           
-          // Limit undo stack size
-          if (this.undoStack.length > this.maxUndoStackSize) {
-            this.undoStack.shift();
+          // Add to undo stack if significantly different
+          const lastContent = this.undoStack[this.undoStack.length - 1];
+          if (content !== lastContent) {
+            this.undoStack.push(content);
+            // Clear redo stack since we have a new change
+            this.redoStack = [];
+            
+            // Limit undo stack size
+            if (this.undoStack.length > this.maxUndoStackSize) {
+              this.undoStack.shift();
+            }
           }
+        } catch (error) {
+          console.error('❌ Failed to save notepad to cloud:', error);
+          this.handleSaveError(error as Error);
         }
       } else {
         console.error('❌ Failed to update notepad state for:', this.id);
@@ -280,6 +314,33 @@ export class Notepad {
       storageService.saveNotepad(this.data);
     }
   }
+
+  /**
+   * Handle resize start
+   */
+  private handleResizeStart(): void {
+    // Add visual feedback during resize
+    this.ui.addResizeFeedback();
+  }
+
+  /**
+   * Handle resize in progress
+   */
+  private handleResize(width: number, height: number): void {
+    // Optional: Add real-time feedback during resize
+    console.log(`Resizing notepad ${this.id} to ${width}x${height}`);
+  }
+
+  /**
+   * Handle resize end
+   */
+  private handleResizeEnd(width: number, height: number): void {
+    // Remove visual feedback
+    this.ui.removeResizeFeedback();
+    
+    // For now, we don't persist size to storage, but this could be added later
+    console.log(`Notepad ${this.id} resized to ${width}x${height}`);
+  }
   
   /**
    * Handle state changes from StateManager
@@ -383,38 +444,166 @@ export class Notepad {
   /**
    * Handle speech-to-text transcript
    */
-  private handleSpeechTranscript(transcript: string): void {
-    if (!transcript.trim()) {
-      return; // Ignore empty transcripts
-    }
-
-    console.log('🎤 Speech transcript received:', {
+  private async handleSpeechTranscript(transcript: string): Promise<void> {
+    if (!this.data) return;
+    
+    console.log('🎤 Adding speech transcript to notepad:', {
       notepadId: this.id,
       transcript: transcript.substring(0, 50) + '...',
-      transcriptLength: transcript.length
+      currentContentLength: this.data.content.length
     });
-
-    // Get current content
-    const currentContent = this.ui.getContent();
     
-    // Append transcript to current content
-    // Add a space if there's existing content and it doesn't end with whitespace
-    let newContent = currentContent;
-    if (currentContent && !currentContent.endsWith(' ') && !currentContent.endsWith('\n')) {
-      newContent += ' ';
-    }
-    newContent += transcript;
+    // Add transcript to existing content with proper spacing
+    const currentContent = this.data.content;
+    const separator = currentContent && !currentContent.endsWith(' ') && !currentContent.endsWith('\n') ? ' ' : '';
+    const newContent = currentContent + separator + transcript;
     
-    // If transcript doesn't end with punctuation, add a period
-    if (!transcript.match(/[.!?]\s*$/)) {
-      newContent += '.';
+    // Update UI first to show immediate feedback
+    if (this.ui) {
+      this.ui.setContent(newContent);
     }
     
-    // Update the notepad content
-    this.ui.setContent(newContent);
+    // Update content through the normal change handler (async)
+    try {
+      await this.handleContentChange(newContent);
+      console.log('✅ Speech transcript successfully saved to cloud');
+    } catch (error) {
+      console.error('❌ Failed to save speech transcript:', error);
+      // Show error feedback to user
+      this.handleSaveError(error as Error);
+    }
+  }
+  
+  /**
+   * Show save status feedback to user
+   */
+  private showSaveStatus(status: 'saving' | 'saved' | 'error'): void {
+    // Add visual feedback to the notepad UI by accessing shadow DOM
+    if (this.ui) {
+      const notepadElement = this.ui.getElement();
+      const shadowRoot = notepadElement.shadowRoot;
+      if (shadowRoot) {
+        let statusElement = shadowRoot.querySelector('.notepad-save-status') as HTMLElement;
+        
+        // Create status element if it doesn't exist
+        if (!statusElement) {
+          statusElement = document.createElement('div');
+          statusElement.className = 'notepad-save-status';
+          const container = shadowRoot.querySelector('.mw-notepad-container');
+          if (container) {
+            container.appendChild(statusElement);
+          }
+        }
+        
+        statusElement.textContent = status === 'saving' ? '☁️ Saving...' : 
+                                   status === 'saved' ? '✅ Saved to cloud' : 
+                                   '❌ Save failed';
+        statusElement.className = `notepad-save-status status-${status}`;
+        
+        // Auto-hide success message after 2 seconds
+        if (status === 'saved') {
+          setTimeout(() => {
+            statusElement.textContent = '';
+            statusElement.className = 'notepad-save-status';
+          }, 2000);
+        }
+      }
+    }
+  }
+  
+  /**
+   * Handle save errors with user-friendly messaging
+   */
+  private handleSaveError(error: Error): void {
+    console.error('💥 Save error details:', {
+      notepadId: this.id,
+      errorMessage: error.message,
+      errorStack: error.stack
+    });
     
-    // Trigger content change handler to save the changes
-    this.handleContentChange(newContent);
+    this.showSaveStatus('error');
+    
+    // Show user-friendly error message based on error type
+    let userMessage = 'Failed to save note to cloud.';
+    
+    if (error.message.includes('Authentication required')) {
+      userMessage = 'Please sign in to save your notes to the cloud.';
+      this.showAuthenticationPrompt();
+    } else if (error.message.includes('connection') || error.message.includes('network')) {
+      userMessage = 'Connection error. Your note will be saved when connection is restored.';
+    }
+    
+    // Show error notification (could be enhanced with a proper notification system)
+    console.warn('🚨 User notification:', userMessage);
+    
+    // For now, we'll add the error message to the status element
+    if (this.ui) {
+      const notepadElement = this.ui.getElement();
+      const shadowRoot = notepadElement.shadowRoot;
+      if (shadowRoot) {
+        let statusElement = shadowRoot.querySelector('.notepad-save-status') as HTMLElement;
+        if (!statusElement) {
+          statusElement = document.createElement('div');
+          statusElement.className = 'notepad-save-status';
+          const container = shadowRoot.querySelector('.mw-notepad-container');
+          if (container) {
+            container.appendChild(statusElement);
+          }
+        }
+        if (statusElement) {
+          statusElement.textContent = userMessage;
+          statusElement.className = 'notepad-save-status status-error';
+        }
+      }
+    }
+  }
+  
+  /**
+   * Show authentication prompt when user needs to sign in
+   */
+  private showAuthenticationPrompt(): void {
+    // This could be enhanced to show a proper modal or redirect to auth
+    console.log('🔐 Authentication required for notepad:', this.id);
+    
+    // For now, we'll add a visual indicator that auth is needed
+    if (this.ui) {
+      const notepadElement = this.ui.getElement();
+      const shadowRoot = notepadElement.shadowRoot;
+      if (shadowRoot) {
+        const authPrompt = document.createElement('div');
+        authPrompt.className = 'notepad-auth-prompt';
+        authPrompt.innerHTML = `
+          <div class="auth-prompt-content">
+            <span>🔐 Sign in required</span>
+            <button class="auth-prompt-button">Sign In</button>
+          </div>
+        `;
+        
+        // Add click handler for sign in button
+        const signInButton = authPrompt.querySelector('.auth-prompt-button') as HTMLButtonElement;
+        if (signInButton) {
+          signInButton.addEventListener('click', () => {
+            // Open extension popup for authentication
+            if (chrome.runtime && chrome.runtime.openOptionsPage) {
+              chrome.runtime.openOptionsPage();
+            }
+          });
+        }
+        
+        // Add to notepad container
+        const container = shadowRoot.querySelector('.mw-notepad-container');
+        if (container) {
+          container.appendChild(authPrompt);
+        }
+        
+        // Auto-remove after 5 seconds
+        setTimeout(() => {
+          if (authPrompt.parentNode) {
+            authPrompt.parentNode.removeChild(authPrompt);
+          }
+        }, 5000);
+      }
+    }
   }
   
   /**
@@ -438,6 +627,11 @@ export class Notepad {
     
     // Clean up drag handler
     this.dragHandler.destroy();
+    
+    // Clean up resize handler
+    if (this.resizeHandler) {
+      this.resizeHandler.destroy();
+    }
     
     // Only delete from storage if notepad is empty
     // Notepads with content should persist for later access

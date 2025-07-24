@@ -25,22 +25,31 @@ export class SpeechIntegration {
   }
 
   private initializeSpeechService() {
+    console.log('🎤 Initializing speech service...');
     try {
       this.speechService = createSpeechService({
         onTranscript: (result: TranscriptionResult) => {
+          console.log('🎤 Received transcript:', {
+            transcript: result.transcript,
+            is_final: result.is_final,
+            confidence: result.confidence
+          });
+          
           if (result.is_final) {
             // Final transcript - add to notepad
             if (result.transcript.trim()) {
+              console.log('🎤 Adding final transcript to notepad:', result.transcript);
               this.options.onTranscript(result.transcript);
             }
             this.hideInterimTranscript();
           } else {
             // Interim transcript - show as preview
+            console.log('🎤 Showing interim transcript:', result.transcript);
             this.showInterimTranscript(result.transcript);
           }
         },
         onError: (error: Error) => {
-          console.error('Speech service error:', error);
+          console.error('🎤 Speech service error:', error);
           this.setStatus('error');
           this.isRecording = false;
           this.updateButtonState();
@@ -49,6 +58,7 @@ export class SpeechIntegration {
           }
         },
         onStatusChange: (newStatus) => {
+          console.log('🎤 Status changed to:', newStatus);
           this.setStatus(newStatus);
           if (newStatus === 'idle') {
             this.isRecording = false;
@@ -57,8 +67,9 @@ export class SpeechIntegration {
           this.updateButtonState();
         }
       });
+      console.log('🎤 Speech service initialized successfully');
     } catch (error) {
-      console.error('Failed to initialize speech service:', error);
+      console.error('🎤 Failed to initialize speech service:', error);
       this.setStatus('error');
     }
   }
@@ -99,18 +110,21 @@ export class SpeechIntegration {
   }
 
   public createSpeechButton(): HTMLElement {
+    console.log('🎤 Creating speech button...');
     const button = document.createElement('button');
     button.className = 'mw-notepad-control mw-speech-button';
     button.title = 'Voice input';
     button.type = 'button';
     
     button.addEventListener('click', (e) => {
+      console.log('🎤 Speech button clicked!');
       e.stopPropagation();
       this.toggleRecording();
     });
 
     this.buttonElement = button;
     this.updateButtonState();
+    console.log('🎤 Speech button created and configured');
     
     return button;
   }
@@ -183,20 +197,37 @@ export class SpeechIntegration {
   }
 
   private async toggleRecording() {
+    console.log('🎤 Toggle recording called. Current state:', {
+      isRecording: this.isRecording,
+      speechServiceAvailable: !!this.speechService,
+      status: this.status
+    });
+    
     if (!this.speechService) {
-      console.error('Speech service not available');
+      console.error('🎤 Speech service not available');
       return;
     }
 
-    if (this.isRecording) {
-      await this.speechService.stopRecording();
-    } else {
-      this.isRecording = true;
-      await this.speechService.startRecording({
-        language: 'en-US',
-        punctuate: true,
-        interim_results: true,
-      });
+    try {
+      if (this.isRecording) {
+        console.log('🎤 Stopping recording...');
+        await this.speechService.stopRecording();
+        console.log('🎤 Recording stopped');
+      } else {
+        console.log('🎤 Starting recording...');
+        this.isRecording = true;
+        await this.speechService.startRecording({
+          language: 'en-US',
+          punctuate: true,
+          interim_results: true,
+        });
+        console.log('🎤 Recording started');
+      }
+    } catch (error) {
+      console.error('🎤 Error toggling recording:', error);
+      this.setStatus('error');
+      this.isRecording = false;
+      this.updateButtonState();
     }
   }
 
