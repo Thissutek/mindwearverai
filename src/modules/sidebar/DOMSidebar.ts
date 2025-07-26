@@ -138,7 +138,17 @@ export class DOMSidebar {
       if (this.searchIntegration) {
         this.searchIntegration.debugSearchIntegration();
       } else {
-        console.log('❌ Search integration not available');
+        // console.log('❌ Search integration not available');
+      }
+    };
+    
+    // Expose force refresh for testing
+    (window as any).forceRefreshSearch = () => {
+      if (this.searchIntegration && (this.searchIntegration as any).forceRefreshWithLocalStorage) {
+        // console.log('🔄 Manually triggering search refresh...');
+        (this.searchIntegration as any).forceRefreshWithLocalStorage();
+      } else {
+        // console.log('❌ Search integration not available');
       }
     };
   }
@@ -150,7 +160,7 @@ export class DOMSidebar {
     this.searchIntegration = new SearchIntegration({
       sidebarContainer: searchContainer,
       onNoteOpen: (noteId: string) => {
-        console.log('📝 Opening note from search:', noteId);
+        // console.log('📝 Opening note from search:', noteId);
         // Dispatch custom event to reopen notepad
         const event = new CustomEvent('mindweaver-sidebar-note-click', {
           detail: { notepadId: noteId }
@@ -162,8 +172,8 @@ export class DOMSidebar {
           this.toggle();
         }
       },
-      onTagFilter: (tag: string) => {
-        console.log('🏷️ Filtering by tag:', tag);
+      onTagFilter: (_tag: string) => {
+        // console.log('🏷️ Filtering by tag:', tag);
         // Could add tag filtering logic here if needed
       }
     });
@@ -171,7 +181,7 @@ export class DOMSidebar {
     // Set up keyboard shortcuts
     this.searchIntegration.setupKeyboardShortcuts();
 
-    console.log('🔍 Search integration initialized in sidebar');
+    // console.log('🔍 Search integration initialized in sidebar');
   }
 
   /**
@@ -182,21 +192,21 @@ export class DOMSidebar {
       const notepadMap = await storageService.loadAllNotepads();
       const allNotepads = Object.values(notepadMap);
       
-      console.log('📋 Sidebar loading notepads:', {
-        totalFound: allNotepads.length,
-        notepadIds: allNotepads.map(n => n.id),
-        withContent: allNotepads.filter(n => n.content.trim() !== '').length,
-        emptyContent: allNotepads.filter(n => n.content.trim() === '').length,
-        contentSamples: allNotepads.map(n => ({ id: n.id, content: n.content.substring(0, 20) + '...' }))
-      });
+      // console.log('📋 Sidebar loading notepads:', {
+      //   totalFound: allNotepads.length,
+      //   notepadIds: allNotepads.map(n => n.id),
+      //   withContent: allNotepads.filter(n => n.content.trim() !== '').length,
+      //   emptyContent: allNotepads.filter(n => n.content.trim() === '').length,
+      //   contentSamples: allNotepads.map(n => ({ id: n.id, content: n.content.substring(0, 20) + '...' }))
+      // });
       
       // Show only notepads with content (users typically don't want to see empty ones)
       this.notepads = allNotepads.filter(notepad => notepad.content.trim() !== '');
       
-      console.log('📋 Sidebar filtered notepads:', {
-        displayCount: this.notepads.length,
-        displayedIds: this.notepads.map(n => n.id)
-      });
+      // console.log('📋 Sidebar filtered notepads:', {
+      //   displayCount: this.notepads.length,
+      //   displayedIds: this.notepads.map(n => n.id)
+      // });
       this.renderNotepads();
     } catch (error) {
       console.error('Error loading notepads:', error);
@@ -436,6 +446,13 @@ export class DOMSidebar {
         if (svg) {
           svg.style.transform = 'rotate(180deg)';
         }
+        
+        // Force refresh search index to include localStorage notes when sidebar opens
+        if (this.searchIntegration && (this.searchIntegration as any).forceRefreshWithLocalStorage) {
+          // console.log('🔄 Sidebar opened, force refreshing search with localStorage...');
+          (this.searchIntegration as any).forceRefreshWithLocalStorage();
+        }
+        
       } else {
         this.sidebarContainer.style.right = '-300px';
         this.sidebarTab.style.right = '0px';
