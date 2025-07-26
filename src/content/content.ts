@@ -9,6 +9,7 @@ import { NotepadState, stateManager } from '../modules/state/StateManager';
 import { storageService } from '../modules/storage/StorageService';
 import { DOMSidebar } from '../modules/sidebar/DOMSidebar';
 import { authBridge } from '../services/authBridge';
+import { SearchIntegration } from '../modules/search/SearchIntegration';
 
 // Constants
 const CONTROL_BUTTON_ID = 'mindweaver-control-button';
@@ -16,6 +17,7 @@ const CONTROL_BUTTON_ID = 'mindweaver-control-button';
 // Track active notepads and sidebar
 const activeNotepads: Map<string, Notepad> = new Map();
 let sidebar: DOMSidebar | null = null;
+let globalSearchIntegration: SearchIntegration | null = null;
 
 /**
  * Create a floating control button for creating new notepads
@@ -127,6 +129,17 @@ async function reopenNotepad(notepadId: string): Promise<void> {
       lastModified: notepadData.lastModified
     });
     
+    // CRITICAL FIX: Sync StateManager with storage data before creating notepad
+    console.log('🔄 Syncing StateManager with storage data for:', notepadId);
+    stateManager.createNotepad(notepadId, {
+      content: notepadData.content,
+      position: notepadData.position,
+      state: notepadData.state,
+      tags: notepadData.tags || [],
+      lastModified: notepadData.lastModified
+    });
+    console.log('✅ StateManager synced with storage data');
+    
     // Calculate position for reopened notepad
     const offset = activeNotepads.size * 20;
     
@@ -190,6 +203,33 @@ async function reopenNotepad(notepadId: string): Promise<void> {
 }
 
 /**
+ * Initialize search integration early to ensure hooks are applied before any notepad creation
+ */
+function initializeSearchIntegrationEarly(): void {
+  console.log('🔧 Initializing search integration early to set up hooks...');
+  
+  // Create a temporary container for early search integration
+  const tempContainer = document.createElement('div');
+  tempContainer.style.display = 'none';
+  document.body.appendChild(tempContainer);
+  
+  // Initialize search integration just to set up the hooks
+  globalSearchIntegration = new SearchIntegration({
+    sidebarContainer: tempContainer,
+    onNoteOpen: (noteId: string) => {
+      console.log('📝 Early search integration - note open request:', noteId);
+      // This will be handled by the main sidebar later
+    },
+    onTagFilter: (tag: string) => {
+      console.log('🏷️ Early search integration - tag filter request:', tag);
+      // This will be handled by the main sidebar later
+    }
+  });
+  
+  console.log('✅ Early search integration initialized - hooks should be active');
+}
+
+/**
  * Initialize the extension with authentication state monitoring
  */
 function initializeExtension(): void {
@@ -198,11 +238,14 @@ function initializeExtension(): void {
   // Initialize authentication state monitoring
   initializeAuthState();
   
-  // Create control button
-  createControlButton();
+  // Initialize search integration IMMEDIATELY to set up hooks before any notepads are created
+  initializeSearchIntegrationEarly();
   
-  // Create sidebar
+  // Create sidebar (this sets up search UI)
   sidebar = new DOMSidebar();
+  
+  // Create control button AFTER sidebar (so search hooks are in place)
+  createControlButton();
   
   console.log('✅ MindWeaver extension initialized successfully');
   
@@ -266,6 +309,16 @@ function initializeExtension(): void {
   
   // Expose reopenNotepad function globally for sidebar access
   (window as any).mindweaverReopenNotepad = reopenNotepad;
+  
+  // Expose search integration functions for debugging
+  (window as any).refreshSearchIndex = async () => {
+    if (globalSearchIntegration) {
+      await globalSearchIntegration.refreshSearchIndex();
+      console.log('🔄 Search index manually refreshed');
+    } else {
+      console.log('❌ Search integration not available');
+    }
+  };
 }
 
 /**

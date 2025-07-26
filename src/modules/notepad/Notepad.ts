@@ -664,6 +664,13 @@ export class Notepad {
     
     // Always delete from state manager (in-memory cleanup)
     stateManager.deleteNotepad(this.id);
+    
+    // Call cleanup function if it exists (removes from activeNotepads Map)
+    const cleanup = (this as any).__cleanup;
+    if (cleanup && typeof cleanup === 'function') {
+      console.log('🧹 Calling cleanup function for notepad:', this.id);
+      cleanup();
+    }
   }
 
   /**

@@ -6,12 +6,14 @@
 
 import { storageService } from '../storage/StorageService';
 import { NotepadData } from '../state/StateManager';
+import { SearchIntegration } from '../search/SearchIntegration';
 
 export class DOMSidebar {
   private sidebarContainer: HTMLElement | null = null;
   private sidebarTab: HTMLElement | null = null;
   private isOpen: boolean = false;
   private notepads: NotepadData[] = [];
+  private searchIntegration: SearchIntegration | null = null;
 
   private static readonly SIDEBAR_CONTAINER_ID = 'mindweaver-sidebar-container';
   private static readonly SIDEBAR_TAB_ID = 'mindweaver-sidebar-tab';
@@ -73,6 +75,13 @@ export class DOMSidebar {
       color: #111827;
     `;
 
+    // Create search container
+    const searchContainer = document.createElement('div');
+    searchContainer.className = 'sidebar-search-container';
+    searchContainer.style.cssText = `
+      margin-bottom: 1rem;
+    `;
+
     // Create notes container
     const notesContainer = document.createElement('div');
     notesContainer.id = 'sidebar-notes-container';
@@ -84,6 +93,7 @@ export class DOMSidebar {
     `;
 
     sidebarContent.appendChild(header);
+    sidebarContent.appendChild(searchContainer);
     sidebarContent.appendChild(notesContainer);
     this.sidebarContainer.appendChild(sidebarContent);
 
@@ -119,6 +129,49 @@ export class DOMSidebar {
     // Add elements to DOM
     document.body.appendChild(this.sidebarContainer);
     document.body.appendChild(this.sidebarTab);
+
+    // Initialize search integration
+    this.initializeSearch(searchContainer);
+    
+    // Expose search integration for debugging
+    (window as any).debugSearchIntegration = () => {
+      if (this.searchIntegration) {
+        this.searchIntegration.debugSearchIntegration();
+      } else {
+        console.log('❌ Search integration not available');
+      }
+    };
+  }
+
+  /**
+   * Initialize search integration
+   */
+  private initializeSearch(searchContainer: HTMLElement): void {
+    this.searchIntegration = new SearchIntegration({
+      sidebarContainer: searchContainer,
+      onNoteOpen: (noteId: string) => {
+        console.log('📝 Opening note from search:', noteId);
+        // Dispatch custom event to reopen notepad
+        const event = new CustomEvent('mindweaver-sidebar-note-click', {
+          detail: { notepadId: noteId }
+        });
+        document.dispatchEvent(event);
+        
+        // Close sidebar after opening note
+        if (this.isOpen) {
+          this.toggle();
+        }
+      },
+      onTagFilter: (tag: string) => {
+        console.log('🏷️ Filtering by tag:', tag);
+        // Could add tag filtering logic here if needed
+      }
+    });
+
+    // Set up keyboard shortcuts
+    this.searchIntegration.setupKeyboardShortcuts();
+
+    console.log('🔍 Search integration initialized in sidebar');
   }
 
   /**
@@ -428,10 +481,17 @@ export class DOMSidebar {
     await this.loadNotepads();
   }
 
+
   /**
    * Clean up sidebar elements
    */
   public cleanup(): void {
+    // Clean up search integration
+    if (this.searchIntegration) {
+      this.searchIntegration.destroy();
+      this.searchIntegration = null;
+    }
+
     const existingContainer = document.getElementById(DOMSidebar.SIDEBAR_CONTAINER_ID);
     const existingTab = document.getElementById(DOMSidebar.SIDEBAR_TAB_ID);
     
