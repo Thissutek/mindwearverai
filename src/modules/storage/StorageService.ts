@@ -18,12 +18,12 @@ export class StorageService {
    */
   async saveNotepad(notepad: NotepadData): Promise<void> {
     const user = authBridge.getCurrentUser();
-    console.log('🔄 StorageService.saveNotepad called:', {
-      notepadId: notepad.id,
-      content: notepad.content.substring(0, 50) + '...',
-      hasUser: !!user,
-      userEmail: user?.email
-    });
+    // console.log('🔄 StorageService.saveNotepad called:', {
+    //   notepadId: notepad.id,
+    //   content: notepad.content.substring(0, 50) + '...',
+    //   hasUser: !!user,
+    //   userEmail: user?.email
+    // });
     
     // Require authentication for cloud-first approach
     if (!user) {
@@ -33,9 +33,9 @@ export class StorageService {
     }
     
     try {
-      console.log('☁️ Saving to Firebase for notepad:', notepad.id);
+      // console.log('☁️ Saving to Firebase for notepad:', notepad.id);
       await FirebaseNotepadService.saveNotepad(notepad);
-      console.log('✅ Firebase save successful for notepad:', notepad.id);
+      // console.log('✅ Firebase save successful for notepad:', notepad.id);
     } catch (error) {
       console.error('❌ Error saving to Firebase:', error);
       throw new Error('Failed to save note to cloud. Please check your connection and try again.');
@@ -47,7 +47,7 @@ export class StorageService {
    * Requires user authentication - throws error if not authenticated
    */
   async saveAllNotepads(notepads: NotepadData[]): Promise<void> {
-    console.log('🔄 StorageService.saveAllNotepads called with', notepads.length, 'notepads');
+    // console.log('🔄 StorageService.saveAllNotepads called with', notepads.length, 'notepads');
     
     const user = authBridge.getCurrentUser();
     if (!user) {
@@ -57,10 +57,10 @@ export class StorageService {
     }
     
     try {
-      console.log('☁️ Firebase batch save for', notepads.length, 'notepads');
+      // console.log('☁️ Firebase batch save for', notepads.length, 'notepads');
       // Save each notepad individually to Firebase
       await Promise.all(notepads.map(notepad => FirebaseNotepadService.saveNotepad(notepad)));
-      console.log('✅ Firebase batch save successful');
+      // console.log('✅ Firebase batch save successful');
     } catch (error) {
       console.error('❌ Error saving batch to Firebase:', error);
       throw new Error('Failed to save notes to cloud. Please check your connection and try again.');
@@ -73,21 +73,21 @@ export class StorageService {
    */
   async loadAllNotepads(): Promise<Record<string, NotepadData>> {
     const user = authBridge.getCurrentUser();
-    console.log('🔄 StorageService.loadAllNotepads called:', {
-      hasUser: !!user,
-      userEmail: user?.email
-    });
+    // console.log('🔄 StorageService.loadAllNotepads called:', {
+    //   hasUser: !!user,
+    //   userEmail: user?.email
+    // });
     
     // Require authentication for cloud-first approach
     if (!user) {
-      console.log('⚠️ Load skipped - user not authenticated. Returning empty notes.');
+      // console.log('⚠️ Load skipped - user not authenticated. Returning empty notes.');
       return {};
     }
     
     try {
-      console.log('☁️ Loading from Firebase');
+      // console.log('☁️ Loading from Firebase');
       const firebaseData = await FirebaseNotepadService.getAllNotepads();
-      console.log('✅ Firebase load successful. Found', Object.keys(firebaseData).length, 'notepads');
+      // console.log('✅ Firebase load successful. Found', Object.keys(firebaseData).length, 'notepads');
       return firebaseData;
     } catch (error) {
       console.error('❌ Error loading from Firebase:', error);
@@ -108,9 +108,9 @@ export class StorageService {
     }
     
     try {
-      console.log('🗑️ Deleting notepad from Firebase:', notepadId);
+      // console.log('🗑️ Deleting notepad from Firebase:', notepadId);
       await FirebaseNotepadService.deleteNotepad(notepadId);
-      console.log('✅ Firebase delete successful for notepad:', notepadId);
+      // console.log('✅ Firebase delete successful for notepad:', notepadId);
     } catch (error) {
       console.error('❌ Error deleting from Firebase:', error);
       throw new Error('Failed to delete note from cloud. Please check your connection and try again.');

@@ -48,13 +48,15 @@ export class Notepad {
       onClose: this.handleClose.bind(this),
       onUndo: this.handleUndo.bind(this),
       onRedo: this.handleRedo.bind(this),
-      onSpeechTranscript: this.handleSpeechTranscript.bind(this)
+      onSpeechTranscript: this.handleSpeechTranscript.bind(this),
+      onTagsChange: this.handleTagsChange.bind(this)
     });
     
     // Initialize UI with current data
     if (this.data) {
       this.ui.setContent(this.data.content);
       this.ui.setState(this.data.state);
+      this.ui.setTags(this.data.tags || []);
     }
     
     // If we have an existing ID (reopening), try to load from storage
@@ -125,16 +127,16 @@ export class Notepad {
    * Handle content changes from the UI
    */
   private async handleContentChange(content: string): Promise<void> {
-    console.log('✏️ Notepad content change:', {
-      notepadId: this.id,
-      oldContent: this.data?.content?.substring(0, 30) + '...',
-      newContent: content.substring(0, 30) + '...',
-      contentLength: content.length,
-      hasData: !!this.data
-    });
+    // console.log('✏️ Notepad content change:', {
+    //   notepadId: this.id,
+    //   oldContent: this.data?.content?.substring(0, 30) + '...',
+    //   newContent: content.substring(0, 30) + '...',
+    //   contentLength: content.length,
+    //   hasData: !!this.data
+    // });
     
     if (this.data && this.data.content !== content) {
-      console.log('🔄 Content changed, updating state and saving...');
+      // console.log('🔄 Content changed, updating state and saving...');
       
       // Update state
       const updatedData = stateManager.updateNotepad(this.id, { content });
@@ -142,11 +144,11 @@ export class Notepad {
       // Save to storage if update was successful
       if (updatedData) {
         this.data = updatedData;
-        console.log('💾 Calling storageService.saveNotepad for:', this.id);
+        // console.log('💾 Calling storageService.saveNotepad for:', this.id);
         
         try {
           await storageService.saveNotepad(this.data);
-          console.log('✅ Successfully saved notepad to cloud:', this.id);
+          // console.log('✅ Successfully saved notepad to cloud:', this.id);
           this.showSaveStatus('saved');
           
           // Add to undo stack if significantly different
@@ -169,7 +171,7 @@ export class Notepad {
         console.error('❌ Failed to update notepad state for:', this.id);
       }
     } else {
-      console.log('⏭️ Content unchanged, skipping save');
+      // console.log('⏭️ Content unchanged, skipping save');
     }
   }
   
@@ -217,17 +219,17 @@ export class Notepad {
    * Load notepad data from storage if it exists (for reopening saved notepads)
    */
   private async loadFromStorageIfExists(options: NotepadOptions): Promise<void> {
-    console.log('📂 Loading from storage for notepad:', this.id);
+    // console.log('📂 Loading from storage for notepad:', this.id);
     
     try {
       const allNotepads = await storageService.loadAllNotepads();
-      console.log('📋 All notepads from storage:', Object.keys(allNotepads));
+      // console.log('📋 All notepads from storage:', Object.keys(allNotepads));
       
       const storedData = allNotepads[this.id];
-      console.log('💾 Stored data for', this.id, ':', storedData);
+      // console.log('💾 Stored data for', this.id, ':', storedData);
       
       if (storedData) {
-        console.log('✨ Found stored content:', storedData.content);
+        // console.log('✨ Found stored content:', storedData.content);
         
         // Update the existing data with stored content
         const updatedData = stateManager.updateNotepad(this.id, {
@@ -236,16 +238,23 @@ export class Notepad {
           state: options.initialState || storedData.state
         });
         
-        console.log('🔄 Updated data in StateManager:', updatedData);
+        // console.log('🔄 Updated data in StateManager:', updatedData);
         
         if (updatedData) {
           this.data = updatedData;
           
-          console.log('🎨 Updating UI with content:', this.data.content);
+          // console.log('🎨 Updating UI with loaded data:', {
+          //   content: this.data.content.substring(0, 50) + '...',
+          //   contentLength: this.data.content.length,
+          //   tags: this.data.tags || [],
+          //   state: this.data.state,
+          //   position: this.data.position
+          // });
           
           // Update UI with loaded content
           this.ui.setContent(this.data.content);
           this.ui.setState(this.data.state);
+          this.ui.setTags(this.data.tags || []);
           
           // Update position
           this.dragHandler.setPosition(this.data.position.x, this.data.position.y);
@@ -253,12 +262,16 @@ export class Notepad {
           // Initialize undo stack with loaded content
           this.pushToUndoStack(this.data.content);
           
-          console.log('✅ Successfully loaded notepad from storage:', this.id, 'Content length:', this.data.content.length);
+          // console.log('✅ Successfully loaded notepad from storage:', this.id, {
+          //   contentLength: this.data.content.length,
+          //   tagCount: (this.data.tags || []).length,
+          //   state: this.data.state
+          // });
         } else {
           console.error('❌ Failed to update StateManager with stored data');
         }
       } else {
-        console.log('❓ No stored data found for notepad:', this.id);
+        // console.log('❓ No stored data found for notepad:', this.id);
       }
     } catch (error) {
       console.error('💥 Failed to load notepad from storage:', error);
@@ -276,7 +289,7 @@ export class Notepad {
       // Save notepad to storage if it has content
       try {
         await storageService.saveNotepad(this.data);
-        console.log('Notepad saved to storage on close:', this.id);
+        // console.log('Notepad saved to storage on close:', this.id);
         
         // Refresh sidebar to show the saved note
         // We need to access the sidebar from the content script
@@ -326,20 +339,20 @@ export class Notepad {
   /**
    * Handle resize in progress
    */
-  private handleResize(width: number, height: number): void {
+  private handleResize(_width: number, _height: number): void {
     // Optional: Add real-time feedback during resize
-    console.log(`Resizing notepad ${this.id} to ${width}x${height}`);
+    // console.log(`Resizing notepad ${this.id} to ${width}x${height}`);
   }
 
   /**
    * Handle resize end
    */
-  private handleResizeEnd(width: number, height: number): void {
+  private handleResizeEnd(_width: number, _height: number): void {
     // Remove visual feedback
     this.ui.removeResizeFeedback();
     
     // For now, we don't persist size to storage, but this could be added later
-    console.log(`Notepad ${this.id} resized to ${width}x${height}`);
+    // console.log(`Notepad ${this.id} resized to ${width}x${height}`);
   }
   
   /**
@@ -359,6 +372,13 @@ export class Notepad {
     
     if (data.content !== this.ui.getContent()) {
       this.ui.setContent(data.content);
+    }
+    
+    // Update tags if needed
+    const currentTags = this.ui.getTags();
+    const newTags = data.tags || [];
+    if (JSON.stringify(currentTags) !== JSON.stringify(newTags)) {
+      this.ui.setTags(newTags);
     }
     
     // Update position if needed
@@ -447,11 +467,11 @@ export class Notepad {
   private async handleSpeechTranscript(transcript: string): Promise<void> {
     if (!this.data) return;
     
-    console.log('🎤 Adding speech transcript to notepad:', {
-      notepadId: this.id,
-      transcript: transcript.substring(0, 50) + '...',
-      currentContentLength: this.data.content.length
-    });
+    // console.log('🎤 Adding speech transcript to notepad:', {
+    //   notepadId: this.id,
+    //   transcript: transcript.substring(0, 50) + '...',
+    //   currentContentLength: this.data.content.length
+    // });
     
     // Add transcript to existing content with proper spacing
     const currentContent = this.data.content;
@@ -466,7 +486,7 @@ export class Notepad {
     // Update content through the normal change handler (async)
     try {
       await this.handleContentChange(newContent);
-      console.log('✅ Speech transcript successfully saved to cloud');
+      // console.log('✅ Speech transcript successfully saved to cloud');
     } catch (error) {
       console.error('❌ Failed to save speech transcript:', error);
       // Show error feedback to user
@@ -616,11 +636,11 @@ export class Notepad {
     
     this.isDestroyed = true;
     
-    console.log('🗑️ Destroying notepad:', {
-      id: this.id,
-      hasContent: this.data?.content?.trim() !== '',
-      content: this.data?.content?.substring(0, 20) + '...'
-    });
+    // console.log('🗑️ Destroying notepad:', {
+    //   id: this.id,
+    //   hasContent: this.data?.content?.trim() !== '',
+    //   content: this.data?.content?.substring(0, 20) + '...'
+    // });
     
     // Clean up UI
     this.ui.destroy();
@@ -636,13 +656,56 @@ export class Notepad {
     // Only delete from storage if notepad is empty
     // Notepads with content should persist for later access
     if (!this.data || this.data.content.trim() === '') {
-      console.log('🗑️ Deleting empty notepad from storage:', this.id);
+      // console.log('🗑️ Deleting empty notepad from storage:', this.id);
       storageService.deleteNotepad(this.id);
     } else {
-      console.log('💾 Preserving notepad with content in storage:', this.id);
+      // console.log('💾 Preserving notepad with content in storage:', this.id);
     }
     
     // Always delete from state manager (in-memory cleanup)
     stateManager.deleteNotepad(this.id);
+    
+    // Call cleanup function if it exists (removes from activeNotepads Map)
+    const cleanup = (this as any).__cleanup;
+    if (cleanup && typeof cleanup === 'function') {
+      // console.log('🧹 Calling cleanup function for notepad:', this.id);
+      cleanup();
+    }
+  }
+
+  /**
+   * Handle tag changes from the UI
+   */
+  private async handleTagsChange(tags: string[]): Promise<void> {
+    // console.log('🏷️ Notepad tags change:', {
+    //   notepadId: this.id,
+    //   oldTags: this.data?.tags || [],
+    //   newTags: tags
+    // });
+    
+    if (this.data && JSON.stringify(this.data.tags || []) !== JSON.stringify(tags)) {
+      // console.log('🔄 Tags changed, updating state and saving...');
+      
+      // Update state
+      const updatedData = stateManager.updateNotepad(this.id, { tags });
+      
+      // Save to storage if update was successful
+      if (updatedData) {
+        this.data = updatedData;
+        // console.log('💾 Calling storageService.saveNotepad for tags:', this.id);
+        
+        try {
+          await storageService.saveNotepad(this.data);
+          // console.log('✅ Successfully saved notepad tags to cloud:', this.id);
+        } catch (error) {
+          console.error('❌ Failed to save notepad tags to cloud:', error);
+          this.handleSaveError(error as Error);
+        }
+      } else {
+        console.error('❌ Failed to update notepad state for tags:', this.id);
+      }
+    } else {
+      // console.log('⏭️ Tags unchanged, skipping save');
+    }
   }
 }

@@ -9,6 +9,7 @@ import { NotepadState, stateManager } from '../modules/state/StateManager';
 import { storageService } from '../modules/storage/StorageService';
 import { DOMSidebar } from '../modules/sidebar/DOMSidebar';
 import { authBridge } from '../services/authBridge';
+import { SearchIntegration } from '../modules/search/SearchIntegration';
 
 // Constants
 const CONTROL_BUTTON_ID = 'mindweaver-control-button';
@@ -16,6 +17,7 @@ const CONTROL_BUTTON_ID = 'mindweaver-control-button';
 // Track active notepads and sidebar
 const activeNotepads: Map<string, Notepad> = new Map();
 let sidebar: DOMSidebar | null = null;
+let globalSearchIntegration: SearchIntegration | null = null;
 
 /**
  * Create a floating control button for creating new notepads
@@ -72,6 +74,15 @@ function createNewNotepad(): void {
   // Add to active notepads
   activeNotepads.set(notepad.getId(), notepad);
   
+  // Set up cleanup handler for when notepad is destroyed
+  const cleanup = () => {
+    activeNotepads.delete(notepad.getId());
+    // console.log('🗑️ Removed notepad from active list:', notepad.getId(), 'Remaining:', activeNotepads.size);
+  };
+  
+  // Store cleanup function for potential use
+  (notepad as any).__cleanup = cleanup;
+  
   // Refresh sidebar to show updated notes
   if (sidebar) {
     sidebar.refresh();
@@ -81,36 +92,141 @@ function createNewNotepad(): void {
 /**
  * Reopen a notepad from existing data (called when clicking sidebar notes)
  */
-function reopenNotepad(notepadId: string): void {
-  console.log('🔄 Attempting to reopen notepad:', notepadId);
+async function reopenNotepad(notepadId: string): Promise<void> {
+  // console.log('🔄 Attempting to reopen notepad:', notepadId);
   
   // Check if notepad is already open
   if (activeNotepads.has(notepadId)) {
-    console.log('⚠️ Notepad already open:', notepadId);
+    // console.log('⚠️ Notepad already open:', notepadId);
+    // Focus the existing notepad by bringing it to front
+    const existingNotepad = activeNotepads.get(notepadId);
+    if (existingNotepad) {
+      const element = existingNotepad.getElement();
+      element.style.zIndex = (9999 + activeNotepads.size).toString();
+    }
     return;
   }
   
-  // Calculate position for reopened notepad
-  const offset = activeNotepads.size * 20;
+  try {
+    // First verify the notepad exists in storage
+    // console.log('📦 Verifying notepad exists in storage:', notepadId);
+    const allNotepads = await storageService.loadAllNotepads();
+    const notepadData = allNotepads[notepadId];
+    
+    if (!notepadData) {
+      console.error('❌ Notepad not found in storage:', notepadId);
+      // Refresh sidebar to remove stale entries
+      if (sidebar) {
+        sidebar.refresh();
+      }
+      return;
+    }
+    
+    // console.log('✅ Found notepad data:', {
+    //   id: notepadData.id,
+    //   contentLength: notepadData.content.length,
+    //   tags: notepadData.tags || [],
+    //   lastModified: notepadData.lastModified
+    // });
+    
+    // CRITICAL FIX: Sync StateManager with storage data before creating notepad
+    // console.log('🔄 Syncing StateManager with storage data for:', notepadId);
+    stateManager.createNotepad(notepadId, {
+      content: notepadData.content,
+      position: notepadData.position,
+      state: notepadData.state,
+      tags: notepadData.tags || [],
+      lastModified: notepadData.lastModified
+    });
+    // console.log('✅ StateManager synced with storage data');
+    
+    // Calculate position for reopened notepad
+    const offset = activeNotepads.size * 20;
+    
+    const notepadOptions: NotepadOptions = {
+      id: notepadId, // Use existing ID to load saved data
+      initialPosition: {
+        x: 100 + offset,
+        y: 100 + offset
+      },
+      initialState: NotepadState.NORMAL
+    };
+    
+    // console.log('🔧 Creating notepad with options:', notepadOptions);
+    
+    // Create notepad with existing ID (will load saved content)
+    const notepad = new Notepad(notepadOptions);
+    
+    // Add to active notepads
+    activeNotepads.set(notepad.getId(), notepad);
+    
+    // Set up cleanup handler for when notepad is destroyed
+    const cleanup = () => {
+      activeNotepads.delete(notepadId);
+      // console.log('🗑️ Removed notepad from active list:', notepadId, 'Remaining:', activeNotepads.size);
+    };
+    
+    // Store cleanup function for potential use
+    (notepad as any).__cleanup = cleanup;
+    
+    // console.log('✅ Successfully reopened notepad:', notepadId, 'Total active:', activeNotepads.size);
+    
+  } catch (error) {
+    console.error('❌ Failed to reopen notepad:', notepadId, error);
+    
+    // Show user-friendly error
+    const errorMessage = document.createElement('div');
+    errorMessage.style.cssText = `
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      background-color: #fee2e2;
+      border: 1px solid #fca5a5;
+      color: #b91c1c;
+      padding: 12px 16px;
+      border-radius: 6px;
+      z-index: 10000;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      font-size: 14px;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    `;
+    errorMessage.textContent = 'Failed to open note. Please try again.';
+    document.body.appendChild(errorMessage);
+    
+    // Auto-remove error message after 3 seconds
+    setTimeout(() => {
+      if (errorMessage.parentNode) {
+        errorMessage.parentNode.removeChild(errorMessage);
+      }
+    }, 3000);
+  }
+}
+
+/**
+ * Initialize search integration early to ensure hooks are applied before any notepad creation
+ */
+function initializeSearchIntegrationEarly(): void {
+  // console.log('🔧 Initializing search integration early to set up hooks...');
   
-  const notepadOptions: NotepadOptions = {
-    id: notepadId, // Use existing ID to load saved data
-    initialPosition: {
-      x: 100 + offset,
-      y: 100 + offset
+  // Create a temporary container for early search integration
+  const tempContainer = document.createElement('div');
+  tempContainer.style.display = 'none';
+  document.body.appendChild(tempContainer);
+  
+  // Initialize search integration just to set up the hooks
+  globalSearchIntegration = new SearchIntegration({
+    sidebarContainer: tempContainer,
+    onNoteOpen: (_noteId: string) => {
+      // console.log('📝 Early search integration - note open request:', noteId);
+      // This will be handled by the main sidebar later
     },
-    initialState: NotepadState.NORMAL
-  };
+    onTagFilter: (_tag: string) => {
+      // console.log('🏷️ Early search integration - tag filter request:', tag);
+      // This will be handled by the main sidebar later
+    }
+  });
   
-  console.log('🔧 Creating notepad with options:', notepadOptions);
-  
-  // Create notepad with existing ID (will load saved content)
-  const notepad = new Notepad(notepadOptions);
-  
-  // Add to active notepads
-  activeNotepads.set(notepad.getId(), notepad);
-  
-  console.log('✅ Reopened notepad:', notepadId, 'Total active:', activeNotepads.size);
+  // console.log('✅ Early search integration initialized - hooks should be active');
 }
 
 /**
@@ -122,11 +238,14 @@ function initializeExtension(): void {
   // Initialize authentication state monitoring
   initializeAuthState();
   
-  // Create control button
-  createControlButton();
+  // Initialize search integration IMMEDIATELY to set up hooks before any notepads are created
+  initializeSearchIntegrationEarly();
   
-  // Create sidebar
+  // Create sidebar (this sets up search UI)
   sidebar = new DOMSidebar();
+  
+  // Create control button AFTER sidebar (so search hooks are in place)
+  createControlButton();
   
   console.log('✅ MindWeaver extension initialized successfully');
   
@@ -180,16 +299,26 @@ function initializeExtension(): void {
   });
   
   // Listen for sidebar note click events to reopen notepads
-  document.addEventListener('mindweaver-sidebar-note-click', (event: Event) => {
+  document.addEventListener('mindweaver-sidebar-note-click', async (event: Event) => {
     const customEvent = event as CustomEvent;
     const notepadId = customEvent.detail?.notepadId;
     if (notepadId) {
-      reopenNotepad(notepadId);
+      await reopenNotepad(notepadId);
     }
   });
   
   // Expose reopenNotepad function globally for sidebar access
   (window as any).mindweaverReopenNotepad = reopenNotepad;
+  
+  // Expose search integration functions for debugging
+  (window as any).refreshSearchIndex = async () => {
+    if (globalSearchIntegration) {
+      await globalSearchIntegration.refreshSearchIndex();
+      // console.log('🔄 Search index manually refreshed');
+    } else {
+      // console.log('❌ Search integration not available');
+    }
+  };
 }
 
 /**
@@ -208,21 +337,21 @@ function initializeAuthState(): void {
     
     // Update sidebar with new auth state
     if (sidebar) {
-      console.log('🔄 Refreshing sidebar with new auth state');
+      // console.log('🔄 Refreshing sidebar with new auth state');
       sidebar.refresh();
     }
     
     // Notify all active notepads of auth state change
-    activeNotepads.forEach((_, notepadId) => {
-      console.log(`🔄 Notifying notepad ${notepadId} of auth state change`);
+    activeNotepads.forEach(() => {
+      // console.log(`🔄 Notifying notepad ${notepadId} of auth state change`);
       // The notepad will handle auth state through StorageService when it tries to save
     });
     
     // Log current storage service auth state for debugging
-    console.log('🔍 StorageService auth check:', {
-      isAuthenticated: storageService.isAuthenticated(),
-      currentUser: storageService.getCurrentUser()?.email || 'null'
-    });
+    // console.log('🔍 StorageService auth check:', {
+    //   isAuthenticated: storageService.isAuthenticated(),
+    //   currentUser: storageService.getCurrentUser()?.email || 'null'
+    // });
   });
   
   // Force initial auth state request with retry logic
@@ -231,12 +360,12 @@ function initializeAuthState(): void {
   const retryDelay = 1000; // 1 second
   
   const requestAuthWithRetry = () => {
-    console.log(`📨 Requesting auth state (attempt ${retryCount + 1}/${maxRetries})...`);
+    // console.log(`📨 Requesting auth state (attempt ${retryCount + 1}/${maxRetries})...`);
     
     // Check if we already have auth state
     const currentUser = authBridge.getCurrentUser();
     if (currentUser) {
-      console.log('✅ Auth state already available:', currentUser.email);
+      // console.log('✅ Auth state already available:', currentUser.email);
       return;
     }
     
@@ -255,7 +384,7 @@ function initializeAuthState(): void {
   setTimeout(requestAuthWithRetry, 500);
   
   // Also try to get auth state immediately
-  console.log('📨 Immediate auth state request...');
+  // console.log('📨 Immediate auth state request...');
   authBridge.requestAuthState();
 }
 

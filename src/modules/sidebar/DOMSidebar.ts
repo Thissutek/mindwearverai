@@ -6,12 +6,14 @@
 
 import { storageService } from '../storage/StorageService';
 import { NotepadData } from '../state/StateManager';
+import { SearchIntegration } from '../search/SearchIntegration';
 
 export class DOMSidebar {
   private sidebarContainer: HTMLElement | null = null;
   private sidebarTab: HTMLElement | null = null;
   private isOpen: boolean = false;
   private notepads: NotepadData[] = [];
+  private searchIntegration: SearchIntegration | null = null;
 
   private static readonly SIDEBAR_CONTAINER_ID = 'mindweaver-sidebar-container';
   private static readonly SIDEBAR_TAB_ID = 'mindweaver-sidebar-tab';
@@ -73,6 +75,13 @@ export class DOMSidebar {
       color: #111827;
     `;
 
+    // Create search container
+    const searchContainer = document.createElement('div');
+    searchContainer.className = 'sidebar-search-container';
+    searchContainer.style.cssText = `
+      margin-bottom: 1rem;
+    `;
+
     // Create notes container
     const notesContainer = document.createElement('div');
     notesContainer.id = 'sidebar-notes-container';
@@ -84,6 +93,7 @@ export class DOMSidebar {
     `;
 
     sidebarContent.appendChild(header);
+    sidebarContent.appendChild(searchContainer);
     sidebarContent.appendChild(notesContainer);
     this.sidebarContainer.appendChild(sidebarContent);
 
@@ -119,6 +129,59 @@ export class DOMSidebar {
     // Add elements to DOM
     document.body.appendChild(this.sidebarContainer);
     document.body.appendChild(this.sidebarTab);
+
+    // Initialize search integration
+    this.initializeSearch(searchContainer);
+    
+    // Expose search integration for debugging
+    (window as any).debugSearchIntegration = () => {
+      if (this.searchIntegration) {
+        this.searchIntegration.debugSearchIntegration();
+      } else {
+        // console.log('❌ Search integration not available');
+      }
+    };
+    
+    // Expose force refresh for testing
+    (window as any).forceRefreshSearch = () => {
+      if (this.searchIntegration && (this.searchIntegration as any).forceRefreshWithLocalStorage) {
+        // console.log('🔄 Manually triggering search refresh...');
+        (this.searchIntegration as any).forceRefreshWithLocalStorage();
+      } else {
+        // console.log('❌ Search integration not available');
+      }
+    };
+  }
+
+  /**
+   * Initialize search integration
+   */
+  private initializeSearch(searchContainer: HTMLElement): void {
+    this.searchIntegration = new SearchIntegration({
+      sidebarContainer: searchContainer,
+      onNoteOpen: (noteId: string) => {
+        // console.log('📝 Opening note from search:', noteId);
+        // Dispatch custom event to reopen notepad
+        const event = new CustomEvent('mindweaver-sidebar-note-click', {
+          detail: { notepadId: noteId }
+        });
+        document.dispatchEvent(event);
+        
+        // Close sidebar after opening note
+        if (this.isOpen) {
+          this.toggle();
+        }
+      },
+      onTagFilter: (_tag: string) => {
+        // console.log('🏷️ Filtering by tag:', tag);
+        // Could add tag filtering logic here if needed
+      }
+    });
+
+    // Set up keyboard shortcuts
+    this.searchIntegration.setupKeyboardShortcuts();
+
+    // console.log('🔍 Search integration initialized in sidebar');
   }
 
   /**
@@ -129,21 +192,21 @@ export class DOMSidebar {
       const notepadMap = await storageService.loadAllNotepads();
       const allNotepads = Object.values(notepadMap);
       
-      console.log('📋 Sidebar loading notepads:', {
-        totalFound: allNotepads.length,
-        notepadIds: allNotepads.map(n => n.id),
-        withContent: allNotepads.filter(n => n.content.trim() !== '').length,
-        emptyContent: allNotepads.filter(n => n.content.trim() === '').length,
-        contentSamples: allNotepads.map(n => ({ id: n.id, content: n.content.substring(0, 20) + '...' }))
-      });
+      // console.log('📋 Sidebar loading notepads:', {
+      //   totalFound: allNotepads.length,
+      //   notepadIds: allNotepads.map(n => n.id),
+      //   withContent: allNotepads.filter(n => n.content.trim() !== '').length,
+      //   emptyContent: allNotepads.filter(n => n.content.trim() === '').length,
+      //   contentSamples: allNotepads.map(n => ({ id: n.id, content: n.content.substring(0, 20) + '...' }))
+      // });
       
       // Show only notepads with content (users typically don't want to see empty ones)
       this.notepads = allNotepads.filter(notepad => notepad.content.trim() !== '');
       
-      console.log('📋 Sidebar filtered notepads:', {
-        displayCount: this.notepads.length,
-        displayedIds: this.notepads.map(n => n.id)
-      });
+      // console.log('📋 Sidebar filtered notepads:', {
+      //   displayCount: this.notepads.length,
+      //   displayedIds: this.notepads.map(n => n.id)
+      // });
       this.renderNotepads();
     } catch (error) {
       console.error('Error loading notepads:', error);
@@ -212,6 +275,33 @@ export class DOMSidebar {
       ? notepad.content.substring(0, 100) + '...' 
       : notepad.content;
 
+    // Add tags display if notepad has tags
+    let tagsElement: HTMLElement | null = null;
+    if (notepad.tags && notepad.tags.length > 0) {
+      tagsElement = document.createElement('div');
+      tagsElement.style.cssText = `
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px;
+        margin-bottom: 0.5rem;
+      `;
+      
+      notepad.tags.forEach(tag => {
+        const tagSpan = document.createElement('span');
+        tagSpan.style.cssText = `
+          background-color: #e0f2fe;
+          color: #0369a1;
+          border: 1px solid #bae6fd;
+          border-radius: 10px;
+          padding: 2px 6px;
+          font-size: 0.7rem;
+          font-weight: 500;
+        `;
+        tagSpan.textContent = `#${tag}`;
+        tagsElement!.appendChild(tagSpan);
+      });
+    }
+
     const noteFooter = document.createElement('div');
     noteFooter.style.cssText = `
       display: flex;
@@ -258,6 +348,10 @@ export class DOMSidebar {
     noteFooter.appendChild(timestamp);
     noteFooter.appendChild(deleteBtn);
 
+    // Add elements to note item in order
+    if (tagsElement) {
+      noteItem.appendChild(tagsElement);
+    }
     noteItem.appendChild(noteContent);
     noteItem.appendChild(noteFooter);
 
@@ -268,11 +362,24 @@ export class DOMSidebar {
         return;
       }
       
+      // Add loading state
+      const originalText = noteContent.textContent;
+      noteContent.textContent = 'Opening note...';
+      noteItem.style.pointerEvents = 'none';
+      noteItem.style.opacity = '0.7';
+      
       // Dispatch custom event to reopen notepad
       const event = new CustomEvent('mindweaver-sidebar-note-click', {
         detail: { notepadId: notepad.id }
       });
       document.dispatchEvent(event);
+      
+      // Reset state after a delay
+      setTimeout(() => {
+        noteContent.textContent = originalText;
+        noteItem.style.pointerEvents = '';
+        noteItem.style.opacity = '';
+      }, 500);
       
       // Close sidebar after clicking note
       this.toggle();
@@ -339,6 +446,13 @@ export class DOMSidebar {
         if (svg) {
           svg.style.transform = 'rotate(180deg)';
         }
+        
+        // Force refresh search index to include localStorage notes when sidebar opens
+        if (this.searchIntegration && (this.searchIntegration as any).forceRefreshWithLocalStorage) {
+          // console.log('🔄 Sidebar opened, force refreshing search with localStorage...');
+          (this.searchIntegration as any).forceRefreshWithLocalStorage();
+        }
+        
       } else {
         this.sidebarContainer.style.right = '-300px';
         this.sidebarTab.style.right = '0px';
@@ -384,10 +498,17 @@ export class DOMSidebar {
     await this.loadNotepads();
   }
 
+
   /**
    * Clean up sidebar elements
    */
   public cleanup(): void {
+    // Clean up search integration
+    if (this.searchIntegration) {
+      this.searchIntegration.destroy();
+      this.searchIntegration = null;
+    }
+
     const existingContainer = document.getElementById(DOMSidebar.SIDEBAR_CONTAINER_ID);
     const existingTab = document.getElementById(DOMSidebar.SIDEBAR_TAB_ID);
     

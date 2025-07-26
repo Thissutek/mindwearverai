@@ -76,6 +76,7 @@ export class MigrationHelper {
             content: notepadData.content || '',
             position: notepadData.position || { x: 100, y: 100 },
             state: notepadData.state || 'normal',
+            tags: notepadData.tags || [],
             lastModified: notepadData.lastModified || Date.now()
           };
 
